@@ -12,6 +12,7 @@
 import os
 
 import numpy as np
+import torch
 from utils.graphics_utils import BasicPointCloud
 from utils.system_utils import searchForMaxIteration
 from scene.gaussian_model import GaussianModel
@@ -23,40 +24,55 @@ from camera_geometry.scan import FrameSet
 import camera_geometry
 from camera_geometry.scan.views import load_frames, CameraImage
 import open3d as o3d
+import cv2
 
 def from_colmap_transform(m):
-    matrix = np.linalg.inv(m)
-    R = -np.transpose(matrix[:3,:3])
-    R[:,0] = -R[:,0]
-    T = -matrix[:3, 3]
-
+    R = np.transpose(m[:3,:3])
+    T = m[:3, 3]
     return R, T
 
 
 def load_cloud(scan:FrameSet) -> BasicPointCloud:
   assert 'sparse' in scan.models, "No sparse model found in scene.json"
   pcd_file = scan.find_file(scan.models.sparse.filename)
-  o3d.io.load_point_cloud(pcd_file)
   pcd = o3d.io.read_point_cloud(str(pcd_file))
 
-  return BasicPointCloud(np.asarray(pcd.points), 
-                         np.asarray(pcd.colors), 
-                         normals=np.array())
+  points = np.asarray(pcd.points)
+  return BasicPointCloud(points=points, 
+                         colors=np.asarray(pcd.colors), 
+                         normals=np.zeros_like(points))
+
+
+
+def camera_extent(frames):
+    cam_centers = [frame.camera.location for frame in frames]
+    cam_centers = np.stack(cam_centers)
+
+    avg_cam_center = np.mean(cam_centers, axis=1, keepdims=True)
+    center = avg_cam_center
+    dist = np.linalg.norm(cam_centers - center, axis=0, keepdims=True)
+    diagonal = np.max(dist)
+
+    return diagonal * 1.1
+
+
 
 
 def load_cameras(scan:FrameSet,  scale=1.0, device="cuda:0"):
 
   def to_camera(i, frame:CameraImage):
       camera:camera_geometry.Camera = frame.camera
-      R, T = from_colmap_transform(camera.parent_to_camera)
+      R, T = from_colmap_transform(camera.camera_t_parent)
+
+      bgr = cv2.cvtColor(frame.rgb, cv2.COLOR_RGB2BGR)
 
       return Camera(colmap_id=i,
                     uid=i,
-                    image_name=frame.image_name,
+                    image_name=frame.rgb_file,
                     R=R, T=T,
                     FoVx=camera.fov[0], 
                     FoVy=camera.fov[1],
-                    image=frame.rgb,
+                    image=torch.from_numpy(bgr).permute(2, 0, 1),
                     data_device=device,
                     gt_alpha_mask=None
                     )
@@ -65,7 +81,12 @@ def load_cameras(scan:FrameSet,  scale=1.0, device="cuda:0"):
   frames = load_frames(
       scan.with_image_scale(scale), alpha=0.0, centered=True)
   
-  return [to_camera(i, frame) for i, frame in enumerate(frames)]
+  cameras = [cam_frame for frame in frames
+            for cam_frame in frame]
+  
+  return [to_camera(i, cam_frame) for i, cam_frame in enumerate(cameras)], camera_extent(cameras) * 0.1
+
+
 
 class Scene:
     gaussians : GaussianModel
@@ -91,10 +112,13 @@ class Scene:
 
         scan = FrameSet.load(args.source_path)
 
-        image_scale = args._resolution if args._resolution > 0 else 1.0
+        image_scale = args.resolution if args.resolution > 0 else 1.0
 
-        self.train_cameras = load_cameras(scan, scale=image_scale)
+        self.train_cameras, self.cameras_extent = load_cameras(scan, scale=image_scale)
         self.test_cameras = []
+
+
+        np.random.shuffle(self.train_cameras)
 
         if self.loaded_iter:
             self.gaussians.load_ply(os.path.join(self.model_path,
@@ -103,7 +127,7 @@ class Scene:
                                                            "point_cloud.ply"))
         else:
             pcd = load_cloud(scan)
-            self.gaussians.create_from_pcd(pcd, self.cameras_extent)
+            self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.1)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
