@@ -38,7 +38,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
-        first_iter = 0
+        # first_iter = 0
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -85,8 +85,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
+
+        reg_loss = opt.reg_gaussians * gaussians.get_regularization_loss()
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))  + reg_loss  
         loss.backward()
 
         iter_end.record()
@@ -101,7 +103,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.close()
 
             # Log and save
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
+            training_report(tb_writer, iteration, l1_loss, testing_iterations, scene, render, (pipe, background))
+            if tb_writer:
+              tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
+              tb_writer.add_scalar('train_loss_patches/reg_loss', reg_loss.item(), iteration)
+
+              tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
+              tb_writer.add_scalar('iter_time', iter_start.elapsed_time(iter_end), iteration)
+              tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
+
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -150,11 +160,8 @@ def prepare_output_and_logger(args):
         print("Tensorboard not available: not logging progress")
     return tb_writer
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs):
-    if tb_writer:
-        tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
-        tb_writer.add_scalar('iter_time', elapsed, iteration)
+def training_report(tb_writer, iteration, l1_loss, testing_iterations, scene : Scene, renderFunc, renderArgs):
+
 
     # Report test and samples of training set
     if iteration in testing_iterations:
@@ -184,11 +191,10 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
 
         if tb_writer:
             tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-            tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
         torch.cuda.empty_cache()
 
 if __name__ == "__main__":
-    iterations = [500, 1000, 2000, 4000, 7000, 10000, 15000, 20000, 30000]
+    iterations = [1, 500, 1000, 2000, 4000, 7000, 10000, 15000, 20000, 30000, 40000, 50000, 60000]
 
     # Set up command line argument parser
     parser = ArgumentParser(description="Training script parameters")
