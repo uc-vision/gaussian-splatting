@@ -167,6 +167,12 @@ class Scene:
             print(f"Writing images...")
             write_images(self.model_path, self.train_cameras)
 
+            scan_file = os.path.join(self.model_path, "scene.json")
+            scan = scan.with_model("sparse", "input.ply")
+
+            print(f"Writing scene.json...")
+            scan.save(scan_file)
+
             if self.gaussians is not None:
               self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.001)
 

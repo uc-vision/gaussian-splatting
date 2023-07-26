@@ -98,6 +98,10 @@ def build_rotation(r):
     R[:, 2, 2] = 1 - 2 * (x*x + y*y)
     return R
 
+
+
+
+
 def build_scaling_rotation(s, r):
     L = torch.zeros((s.shape[0], 3, 3), dtype=torch.float, device="cuda")
     R = build_rotation(r)

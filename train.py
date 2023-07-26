@@ -86,9 +86,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
 
-        reg_loss = opt.reg_gaussians * gaussians.get_regularization_loss()
+
         Ll1 = l1_loss(image, gt_image)
+        reg_loss = torch.zeros(1, device="cuda")
+        if opt.reg_gaussians > 0.0:
+          reg_loss = opt.reg_gaussians * gaussians.get_regularization_loss()
+
+
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))  + reg_loss  
+
+
         loss.backward()
 
         iter_end.record()
@@ -123,11 +130,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
+                    gaussians.densify(opt.densify_grad_threshold, 0.005, scene.cameras_extent)
                 
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
+
+            if iteration % opt.densification_interval == 0:
+              size_threshold = 10 if iteration > opt.opacity_reset_interval else None
+              gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold, extent=scene.cameras_extent)
 
             # Optimizer step
             if iteration < opt.iterations:
