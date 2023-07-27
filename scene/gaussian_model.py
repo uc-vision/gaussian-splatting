@@ -144,6 +144,7 @@ class GaussianModel:
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
+
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
     def training_setup(self, training_args):
@@ -397,8 +398,9 @@ class GaussianModel:
         prune_mask = (self.get_opacity < min_opacity).squeeze()
         if max_screen_size:
             big_points_vs = self.max_radii2D > max_screen_size
-            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
-            prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
+            # big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
+
+            prune_mask = prune_mask | big_points_vs # | big_points_ws 
         self.prune_points(prune_mask)
 
         torch.cuda.empty_cache()
@@ -412,5 +414,5 @@ class GaussianModel:
         scaling = self.get_scaling
         factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
 
-        return factors.mean()
+        return factors.mean() #+ (1 - self.get_opacity.mean()) * 0.1
         

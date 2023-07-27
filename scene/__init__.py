@@ -45,6 +45,17 @@ def sample_spherical(npoints, ndim=3):
     return vec
 
 
+def add_bg_points(pcd, n_points=10000, radius=100.0):
+    points = sample_spherical(n_points) * radius
+    colors = np.ones_like(points)
+
+    aug = o3d.geometry.PointCloud()
+    aug.points=o3d.utility.Vector3dVector(np.concatenate([pcd.points, points]))
+    aug.colors=o3d.utility.Vector3dVector(np.concatenate([pcd.colors, colors]))
+
+    return aug
+
+
 def load_cloud(scan:FrameSet) -> BasicPointCloud:
   assert 'sparse' in scan.models, "No sparse model found in scene.json"
   pcd_file = scan.find_file(scan.models.sparse.filename)
@@ -174,6 +185,7 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
+              pcd = add_bg_points(pcd, n_points=10000, radius=100.0)
               self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.001)
 
     def save(self, iteration):

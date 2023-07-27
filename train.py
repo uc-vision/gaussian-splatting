@@ -31,7 +31,7 @@ except ImportError:
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset.sh_degree)
+    gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
     if checkpoint:
@@ -71,7 +71,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gaussians.update_learning_rate(iteration)
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
-        if iteration % 1000 == 0:
+        if iteration % opt.sh_inc_iterations == 0:
             gaussians.oneupSHdegree()
 
         # Pick a random Camera
@@ -130,14 +130,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    gaussians.densify(opt.densify_grad_threshold, 0.005, scene.cameras_extent)
+                    gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
+                    
+                    size_threshold = 40 #if iteration > opt.opacity_reset_interval else None
+                    gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold, extent=scene.cameras_extent)
                 
-                if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()
+                # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
+                #     gaussians.reset_opacity()
 
-            if iteration % opt.densification_interval == 0:
-              size_threshold = 10 if iteration > opt.opacity_reset_interval else None
-              gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold, extent=scene.cameras_extent)
+        
 
             # Optimizer step
             if iteration < opt.iterations:
