@@ -21,10 +21,11 @@ def main():
   print("Using point cloud {}".format(cloud_file))
 
   camera_file = args.model_path/"cameras.json"
+  scene_file = args.model_path/"scene.json"
   input_file = args.model_path/"input.ply"
   cfg_file = args.model_path/"cfg_args"
   
-  files:List[Path] = [camera_file, input_file, cloud_file, cfg_file]
+  files:List[Path] = [camera_file, input_file, cloud_file, cfg_file, scene_file]
   
   for file in files:
     if not file.exists():
