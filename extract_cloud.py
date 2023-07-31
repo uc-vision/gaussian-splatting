@@ -9,10 +9,11 @@ import numpy as np
 from camera_geometry import FrameSet
 from arguments import OptimizationParams
 from scene.gaussian_model import GaussianModel
+from geometry_grid.taichi_geometry.conversion import struct_size
 
 import torch
 import taichi as ti
-from taichi.math import vec3
+from taichi.math import vec3, vec4
 
 @ti.func
 def quat_to_mat(q:ti.math.vec4) -> ti.math.mat3:
@@ -35,7 +36,7 @@ class AABox:
     return self.upper - self.lower
 
 @ti.func 
-def splat_bounds(q:ti.math.vec4, scale:ti.math.vec3) -> AABox:
+def splat_bounds(p:vec3, q:vec4, scale:vec3) -> AABox:
   axes = scale * quat_to_mat(q)
 
   lower, upper = ti.math.vec3(np.inf), ti.math.vec3(-np.inf)
@@ -43,6 +44,8 @@ def splat_bounds(q:ti.math.vec4, scale:ti.math.vec3) -> AABox:
     corner = axes @ ti.math.vec3(i, j, k)
     lower = ti.min(lower, corner)
     upper = ti.max(upper, corner)
+
+  return AABox(lower + p, upper + p)
 
 @ti.func 
 def to_covariance(q:ti.math.vec4, scale:ti.math.vec3) -> ti.math.mat3:
@@ -52,7 +55,7 @@ def to_covariance(q:ti.math.vec4, scale:ti.math.vec3) -> ti.math.mat3:
 @ti.func
 def gaussian(x:ti.math.vec3, mean:ti.math.vec3, inv_cov:ti.math.mat3) -> ti.f32:
   x = x - mean
-  return ti.exp(-0.5 * x @ inv_cov @ x)
+  return ti.exp(-0.5 * ti.math.dot(x, inv_cov @ x))
 
 
 def block_bitmask(size, chunk, levels=3):
@@ -66,26 +69,81 @@ def block_bitmask(size, chunk, levels=3):
     return snode
 
 
+@ti.data_oriented
+class Splat:
+  p: vec3
+  q: vec4
+  scale: vec3
+  color: vec3
+  opacity: ti.f32
+
+  @ti.func
+  def from_vec(self, v:ti.template()):
+    self.p = v[0:3]
+    self.q = v[3:7]
+    self.scale = v[7:10]
+    self.color = v[10:13]
+    self.opacity = v[13]
+  
+spat_vec=ti.types.vector(dtype=ti.f32, n=struct_size(Splat))
+
+
+
+
 class DensityGrid:
 
   def init(self, bounds:AABox, cell_size:float, chunk_size=8):
-    self.density = ti.field(ti.f16)
-    self.color = ti.Vector.field(3, ti.f16)
+    self.rgb_density = ti.Vector.field(4, ti.f16)
 
     self.bounds = bounds
     self.grid_size = ti.math.ceil(bounds.extents / cell_size)
     self.cells = block_bitmask(self.grid_size, chunk_size)
 
-    self.cells.place(self.density)
-    self.cells.place(self.color)
+    self.cell_size = cell_size
+
+    self.cells.place(self.rgb_density)
+
+  @ti.kernel
+  def splat(self, splats:ti.types.ndarray(dtype=spat_vec), threshold:ti.f32):
+    
+    for i in ti.static(range(splats.shape[0])):
+      splat = Splat()
+      splat.from_vec(splats[i])
+
+      splat.p -= self.bounds.lower
+      splat.scale /= self.cell_size
+
+      r = splat_bounds(splat.p, splat.q, 3 * splat.scale)
+      
+      lower = ti.max(ti.cast(ti.floor(r.lower), ti.i32), 0)
+      upper = ti.min(ti.cast(ti.ceil(r.upper), ti.i32), self.grid_size - 1)
+
+      inv_cov = ti.math.inverse(to_covariance(splat.q, splat.scale))
+
+      for i in ti.grouped(ti.ndrange(lower, upper)):
+        density = gaussian(i, splat.p, inv_cov) * splat.opacity
+
+        if density > threshold:
+          self.rgb_density[i] += vec4(splat.color, density)
+
+        
+    
 
 
-def render_grid(xyz:torch.Tensor, scale:torch.Tensor, q:torch.Tensor, cell_size:float):
+def render_grid(model:GaussianModel, cell_size:float):
+  xyz = model.get_xyz
+
   bounds = AABox(
     lower = vec3(*torch.min(xyz, dim=1).values),
     upper = vec3(*torch.max(xyz, dim=1).values))
   
   grid = DensityGrid(bounds, cell_size)
+  splats = torch.concatenate([xyz, 
+                              model.get_rotation, 
+                              model._features_dc, 
+                              model.get_opacity], dim=1)
+  
+  grid.splat(splats, 0.01)
 
 
 
@@ -136,8 +194,10 @@ def main():
       model.save_ply(args.write_crop)
 
   
-  # ti.init(arch=ti.cuda)
-  # render_grid(model.get_xyz, model.get_scaling, model.get_rotation, args.grid_size)
+  ti.init(arch=ti.cuda)
+
+
+  render_grid(model, args.grid_size)
 
   # cloud.point["colors"] = color
   # o3d.visualization.draw([cloud, roi])
