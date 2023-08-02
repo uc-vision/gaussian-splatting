@@ -18,6 +18,7 @@ from scene.colmap_loader import read_extrinsics_text, read_intrinsics_text, qvec
 from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
 import numpy as np
 import json
+import imageio
 from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
@@ -190,8 +191,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         for idx, frame in enumerate(frames):
             cam_name = os.path.join(path, frame["file_path"] + extension)
 
-            if is_test:
-                depth_name = os.path.join(path, frame["file_path"] + "_depth_0001" + extension)
+            depth_name = os.path.join(path, frame["file_path"] + "_depth0000" + '.exr')
 
             matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
             R = -np.transpose(matrix[:3,:3])
@@ -201,7 +201,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             image_path = os.path.join(path, cam_name)
             image_name = Path(cam_name).stem
             image = Image.open(image_path)
-            depth = Image.open(depth_name).convert('RGBA') if is_test else None
+            depth = imageio.imread(depth_name)
 
             im_data = np.array(image.convert("RGBA"))
 
@@ -222,9 +222,9 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
     
     if not eval:
         train_cam_infos.extend(test_cam_infos)

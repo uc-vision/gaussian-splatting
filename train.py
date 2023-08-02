@@ -71,7 +71,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
             viewpoint_stack = scene.getTrainCameras().copy()
 
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        gt_depth = viewpoint_cam.depth.unsqueeze(0)
+        gt_depth = viewpoint_cam.depth
         # Render
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -82,7 +82,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         depth_loss = l1_loss(depth, gt_depth) * 0.1
-        loss = loss + depth_loss
+        # loss = loss + depth_loss
         loss.backward()
 
         iter_end.record()

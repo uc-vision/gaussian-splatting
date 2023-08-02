@@ -11,7 +11,7 @@
 
 from scene.cameras import Camera
 import numpy as np
-from utils.general_utils import PILtoTorch
+from utils.general_utils import PILtoTorch, ArrayToTorch
 from utils.graphics_utils import fov2focal
 
 WARNED = False
@@ -39,13 +39,16 @@ def loadCam(args, id, cam_info, resolution_scale):
         resolution = (int(orig_w / scale), int(orig_h / scale))
 
     resized_image_rgb = PILtoTorch(cam_info.image, resolution)
-    resized_depth_rgb = PILtoTorch(cam_info.depth, resolution) if cam_info.depth is not None else None
+    if cam_info.depth is not None:
+        resized_depth_rgb = ArrayToTorch(cam_info.depth, resolution)
+    else:
+        resized_depth_rgb = None
 
     gt_image = resized_image_rgb[:3, ...]
     if resized_depth_rgb is not None:
-        depth_mask = resized_depth_rgb[3, ...] > 0
+        depth_mask = resized_depth_rgb[0, ...] > 60000
         gt_depth = resized_depth_rgb[0, ...]
-        gt_depth[depth_mask] = 2. + 6. * (1 - gt_depth[depth_mask])
+        gt_depth[depth_mask] = 0
     else:
         gt_depth = None
 
