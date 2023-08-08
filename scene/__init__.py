@@ -46,7 +46,9 @@ def sample_spherical(npoints, ndim=3):
 
 
 def add_bg_points(pcd, n_points=10000, radius=100.0):
-    points = sample_spherical(n_points) * radius
+    dist = np.random.rand(n_points, 1) * radius
+
+    points = sample_spherical(n_points) * dist
     colors = np.ones_like(points)
 
     aug = o3d.geometry.PointCloud()
@@ -185,7 +187,7 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
-              pcd = add_bg_points(pcd, n_points=10000, radius=100.0)
+              pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
               self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.001)
 
     def save(self, iteration):

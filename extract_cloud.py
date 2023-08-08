@@ -25,6 +25,15 @@ def quat_to_mat(q:ti.math.vec4) -> ti.math.mat3:
     2*x*z - 2*w*y, 2*y*z + 2*w*x, 1 - 2*x2 - 2*y2
   )
 
+# @ti.func 
+# def erf_approx(sigma):
+#   # approximation of gaussian integral from -inf to inf
+#   # https://en.wikipedia.org/wiki/Error_function#Approximation_with_elementary_functions
+
+  
+
+  
+
 @ti.data_oriented
 class AABox:
   lower:ti.math.vec3
