@@ -136,12 +136,13 @@ class Scene:
         """b
         :param path: Path to colmap scene main folder.
         """
+
         self.model_path = args.model_path
         self.loaded_iter = None
         self.gaussians = gaussians
 
         if load_iteration:
-            if load_iteration == -1:
+            if load_iteration is None:
                 self.loaded_iter = searchForMaxIteration(os.path.join(self.model_path, "point_cloud"))
             else:
                 self.loaded_iter = load_iteration
@@ -149,7 +150,7 @@ class Scene:
 
 
         if not os.path.exists(args.source_path):
-            raise Exception("Scan path {} does not exist".format(args.source_path))
+            raise Exception("Scan path '{}' does not exist".format(args.source_path))
 
 
         scan = FrameSet.load(args.source_path).with_image_scale(args.resolution)
@@ -163,7 +164,7 @@ class Scene:
 
         np.random.shuffle(self.train_cameras)
 
-        if self.loaded_iter:
+        if self.loaded_iter is not None:
             self.gaussians.load_ply(os.path.join(self.model_path,
                                                            "point_cloud",
                                                            "iteration_" + str(self.loaded_iter),

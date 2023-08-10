@@ -13,6 +13,8 @@ from errno import EEXIST
 from os import makedirs, path
 import os
 
+from natsort import natsorted
+
 def mkdir_p(folder_path):
     # Creates a directory. equivalent to using mkdir -p on the command line
     try:
@@ -24,5 +26,5 @@ def mkdir_p(folder_path):
             raise
 
 def searchForMaxIteration(folder):
-    saved_iters = [int(fname.split("_")[-1]) for fname in os.listdir(folder)]
-    return max(saved_iters)
+    saved_iters = natsorted([fname.split("_")[-1] for fname in os.listdir(folder)])
+    return saved_iters[-1]
