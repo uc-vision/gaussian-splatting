@@ -137,11 +137,7 @@ class Scene:
         :param path: Path to colmap scene main folder.
         """
 
-        if args.model_path == "":
-            args.model_path = Path(args.source_path).parent / "gaussian"
-        else:
-          self.model_path = args.model_path
-
+        self.model_path = args.model_path
 
         self.loaded_iter = None
         self.gaussians = gaussians

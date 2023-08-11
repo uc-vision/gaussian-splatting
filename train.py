@@ -10,6 +10,7 @@
 #
 
 import os
+from pathlib import Path
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim
@@ -158,7 +159,11 @@ def prepare_output_and_logger(args):
     #     args.model_path = os.path.join("./output/", unique_str[0:10])
         
     # Set up output folder
+    if args.model_path == "":
+        args.model_path = Path(args.source_path).parent / "gaussian"
+    
     print("Output folder: {}".format(args.model_path))
+
     os.makedirs(args.model_path, exist_ok = True)
     with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
         cfg_log_f.write(str(Namespace(**vars(args))))

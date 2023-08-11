@@ -85,7 +85,7 @@ class OptimizationParams(ParamGroup):
         self.reg_gaussians = 0.0
         self.sh_inc_iterations = 2000
 
-        self.densification_interval = 200
+        self.densification_interval = 100
         self.opacity_reset_interval = 2000
         self.densify_from_iter = 500
         self.densify_until_iter = 30_000
