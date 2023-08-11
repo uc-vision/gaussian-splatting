@@ -130,7 +130,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
-                if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
+                if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
                     
                     size_threshold = 40 #if iteration > opt.opacity_reset_interval else None
@@ -160,7 +160,7 @@ def prepare_output_and_logger(args):
         
     # Set up output folder
     if args.model_path == "":
-        args.model_path = Path(args.source_path).parent / "gaussian"
+        args.model_path = str(Path(args.source_path).parent / "gaussian")
     
     print("Output folder: {}".format(args.model_path))
 

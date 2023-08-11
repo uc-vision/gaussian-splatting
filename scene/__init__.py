@@ -189,7 +189,7 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
-              pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
+              #pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
               self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.001)
 
     def save(self, iteration):
