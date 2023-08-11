@@ -51,7 +51,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
-    for iteration in range(first_iter, opt.iterations + 1):        
+    for iteration in range(first_iter, opt.iterations + 1):     
+        # if iteration % 10 == 0:
+        #   torch.cuda.empty_cache()
+   
         if network_gui.conn == None:
             network_gui.try_connect()
         while network_gui.conn != None:
@@ -82,6 +85,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         # gt_depth = viewpoint_cam.depth
         # Render
+
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         # depth = render_pkg["depth"]
@@ -100,6 +104,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss.backward()
 
         iter_end.record()
+
+
 
         with torch.no_grad():
             # Progress bar
