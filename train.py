@@ -142,7 +142,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 t = (iteration - opt.densify_from_iter) / (opt.densify_until_iter - opt.densify_from_iter)
                 densification_interval = opt.densification_interval * (1 -t) + opt.final_densification_interval * t
 
-                if iteration >= opt.densify_from_iter and iters_since_densification < densification_interval:
+                if iteration >= opt.densify_from_iter and iters_since_densification > densification_interval:
                     iters_since_densification = 0
 
                     gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
