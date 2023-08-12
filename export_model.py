@@ -40,7 +40,7 @@ def main():
     print(f"Copying {file} to {out_filename}")
     out_filename.parent.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy(file, out_filename)
+    shutil.copyfile(file, out_filename)
 
 
 
