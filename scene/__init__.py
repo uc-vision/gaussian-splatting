@@ -190,7 +190,7 @@ class Scene:
 
             if self.gaussians is not None:
               # pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
-              self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent * 0.1)
+              self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
