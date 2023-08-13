@@ -356,7 +356,6 @@ class GaussianModel:
         selected_pts_mask = torch.logical_and(selected_pts_mask,
                                               torch.max(self.get_scaling, dim=1).values > self.percent_dense*scene_extent)
 
-
         stds = self.get_scaling[selected_pts_mask].repeat(N,1)
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
@@ -396,15 +395,25 @@ class GaussianModel:
         self.densify_and_split(grads, max_grad, extent)
 
     def prune(self, min_opacity, max_screen_size, extent):
-        prune_mask = (self.get_opacity < min_opacity).squeeze()
-        if max_screen_size:
-            big_points_vs = self.max_radii2D > max_screen_size
-            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
 
-            prune_mask = prune_mask | big_points_vs | big_points_ws 
+        min_opacity = (self.get_opacity < min_opacity).squeeze()
+
+        big_points_vs = self.max_radii2D > max_screen_size 
+        small_points_vs = (self.max_radii2D > 0) & (self.max_radii2D < 1.0)  
+        big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
+
+        radii = self.max_radii2D[self.max_radii2D > 0]
+        if radii.shape[0] > 0:
+          print(torch.min(radii, dim=0))
+
+        prune_mask = min_opacity | big_points_vs | big_points_ws | small_points_vs
         self.prune_points(prune_mask)
 
-        torch.cuda.empty_cache()
+        return dict(min_opacity=min_opacity.sum().item(),
+                    big_points_vs=big_points_vs.sum().item(),
+                    small_points_vs=small_points_vs.sum().item(),
+                    big_points_ws=big_points_ws.sum().item())
+    
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
@@ -412,8 +421,8 @@ class GaussianModel:
 
 
     def get_regularization_loss(self):
-        scaling = self.get_scaling
-        factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
+        # scaling = self.get_scaling
+        # factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
 
-        return factors.mean() #+ (1 - self.get_opacity.mean()) * 0.1
+        return (1 - self.get_opacity.mean()) 
         
