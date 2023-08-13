@@ -145,7 +145,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     iters_since_densification = 0
                     densify_stats = gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
 
-                    size_threshold = 40 #if iteration > opt.opacity_reset_interval else None
+                    size_threshold = 20 #if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold, extent=scene.cameras_extent)
 
                     for k, v in prune_stats.items():
