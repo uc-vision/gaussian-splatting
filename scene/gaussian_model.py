@@ -51,7 +51,9 @@ class GaussianModel:
         self._rotation = torch.empty(0)
         self._opacity = torch.empty(0)
         self.max_radii2D = torch.empty(0)
-        self.xyz_gradient_accum = torch.empty(0)
+        self.vs_gradient_accum = torch.empty(0)
+        self.ws_gradient_accum = torch.empty(0)
+
         self.denom = torch.empty(0)
         self.optimizer = None
         self.percent_dense = 0
@@ -68,7 +70,9 @@ class GaussianModel:
             self._rotation,
             self._opacity,
             self.max_radii2D,
-            self.xyz_gradient_accum,
+            self.vs_gradient_accum,
+            self.ws_gradient_accum,
+            
             self.denom,
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
@@ -83,12 +87,16 @@ class GaussianModel:
         self._rotation, 
         self._opacity,
         self.max_radii2D, 
-        xyz_gradient_accum, 
+        vs_gradient_accum, 
+        ws_gradient_accum,
         denom,
         opt_dict, 
         self.spatial_lr_scale) = model_args
+        
         self.training_setup(training_args)
-        self.xyz_gradient_accum = xyz_gradient_accum
+        self.vs_gradient_accum = vs_gradient_accum
+        self.ws_gradient_accum = ws_gradient_accum
+        
         self.denom = denom
         self.optimizer.load_state_dict(opt_dict)
 
@@ -149,7 +157,9 @@ class GaussianModel:
 
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
-        self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
+        self.vs_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
+        self.ws_gradient_accum = torch.zeros(self.get_xyz.shape, device="cuda")
+        
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
 
         l = [
@@ -299,8 +309,9 @@ class GaussianModel:
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
 
-        self.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
-
+        self.vs_gradient_accum = self.vs_gradient_accum[valid_points_mask]
+        self.ws_gradient_accum = self.ws_gradient_accum[valid_points_mask]
+        
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
 
@@ -325,6 +336,10 @@ class GaussianModel:
                 optimizable_tensors[group["name"]] = group["params"][0]
 
         return optimizable_tensors
+    
+    def append_zeros(self, tensor, n):
+        shape = (n - tensor.shape[0],) + tensor.shape[1:]
+        return torch.cat((tensor, torch.zeros(shape, device="cuda")), dim=0)
 
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation):
         d = {"xyz": new_xyz,
@@ -342,9 +357,13 @@ class GaussianModel:
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
 
-        self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = self.append_zeros(self.max_radii2D, self._xyz.shape[0])
+        self.denom = self.append_zeros(self.denom, self._xyz.shape[0])
+        self.ws_gradient_accum = self.append_zeros(self.ws_gradient_accum, self._xyz.shape[0])
+        self.vs_gradient_accum = self.append_zeros(self.vs_gradient_accum, self._xyz.shape[0])
+
+
+
 
     def densify_and_split(self, grads, grad_threshold, scene_extent, N=2):
         n_init_points = self.get_xyz.shape[0]
@@ -367,10 +386,11 @@ class GaussianModel:
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
         new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
 
+
+        self.prune_points(selected_pts_mask)
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-        prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
-        self.prune_points(prune_filter)
+        return selected_pts_mask.sum()
 
     def densify_and_clone(self, grads, grad_threshold, scene_extent):
         # Extract points that satisfy the gradient condition
@@ -386,13 +406,23 @@ class GaussianModel:
         new_rotation = self._rotation[selected_pts_mask]
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
+        return selected_pts_mask.sum()
+
 
     def densify(self, max_grad, extent):
-        grads = self.xyz_gradient_accum / self.denom
+        grads = self.vs_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
 
-        self.densify_and_clone(grads, max_grad, extent)
-        self.densify_and_split(grads, max_grad, extent)
+        
+        cloned = self.densify_and_clone(grads, max_grad, extent)
+        split = self.densify_and_split(grads, max_grad, extent)
+
+        self.vs_gradient_accum.fill_(0.0)
+        self.ws_gradient_accum.fill_(0.0)
+
+        self.denom.fill_(0.0)
+
+        return dict(cloned=cloned, split=split)
 
     def prune(self, min_opacity, max_screen_size, extent):
 
@@ -402,12 +432,11 @@ class GaussianModel:
         small_points_vs = (self.max_radii2D > 0) & (self.max_radii2D < 1.0)  
         big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
 
-        radii = self.max_radii2D[self.max_radii2D > 0]
-        if radii.shape[0] > 0:
-          print(torch.min(radii, dim=0))
-
         prune_mask = min_opacity | big_points_vs | big_points_ws | small_points_vs
         self.prune_points(prune_mask)
+
+        self.max_radii2D.fill_(0.0)
+
 
         return dict(min_opacity=min_opacity.sum().item(),
                     big_points_vs=big_points_vs.sum().item(),
@@ -416,13 +445,16 @@ class GaussianModel:
     
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
-        self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
+        self.vs_gradient_accum[update_filter] += torch.norm(
+            viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
+        
+        self.ws_gradient_accum[update_filter] += self._xyz.grad[update_filter]
         self.denom[update_filter] += 1
 
 
     def get_regularization_loss(self):
-        # scaling = self.get_scaling
-        # factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
+        scaling = self.get_scaling
+        factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
 
-        return (1 - self.get_opacity.mean()) 
+        return factors.mean() #(1 - self.get_opacity.mean()) 
         
