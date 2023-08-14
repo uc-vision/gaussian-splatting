@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 import torch
@@ -26,9 +27,11 @@ from scene.cameras import Camera
 
 from camera_geometry.scan import FrameSet
 import camera_geometry
-from camera_geometry.scan.views import load_frames, CameraImage
+from camera_geometry.scan.views import load_frames_with, undistort_cameras, CameraImage, Undistortion
 from camera_geometry.transforms import translate_44
 from tqdm import tqdm
+
+from scan_tools.crop_points import visibility_depths
 
 import open3d as o3d
 import cv2
@@ -90,7 +93,7 @@ def camera_extents(scan:FrameSet):
 
 
 
-def load_cameras(scan:FrameSet, device="cuda:0"):
+def load_cameras(scan:FrameSet, undistortions:Dict[str, Undistortion], device="cuda:0"):
 
   def to_camera(i, frame:CameraImage):
       camera:camera_geometry.Camera = frame.camera
@@ -110,8 +113,7 @@ def load_cameras(scan:FrameSet, device="cuda:0"):
                     )
       
 
-  frames = load_frames(scan, alpha=0.0, centered=True)
-  
+  frames = load_frames_with(scan, undistortions)
   cameras = [cam_frame for frame in frames
             for cam_frame in frame]
   
@@ -157,10 +159,14 @@ class Scene:
         scan = FrameSet.load(args.source_path).with_image_scale(args.resolution)
         centre, self.cameras_extent = camera_extents(scan)
 
-        scan = scan.transform(translate_44(-centre[0], -centre[1], -centre[2]))
+        undistortions = undistort_cameras(scan.cameras, alpha=0, centered=True)
+        cameras = {k:dist.undistorted for k, dist in undistortions.items()}
+
+        scan = scan.transform(translate_44(-centre[0], -centre[1], -centre[2])).with_cameras(cameras)
+        pcd = load_cloud(scan).translate(-centre)
 
         print("Loading images...")
-        self.train_cameras = load_cameras(scan)
+        self.train_cameras = load_cameras(scan, undistortions)
         self.test_cameras = []
 
         np.random.shuffle(self.train_cameras)
@@ -172,8 +178,6 @@ class Scene:
                                                            "point_cloud.ply"))
                                                            
         else:
-            pcd = load_cloud(scan).translate(-centre)
-
             o3d.io.write_point_cloud(os.path.join(self.model_path, "input.ply"), pcd)          
             json_cameras = [camera_to_JSON(id, cam) for id, cam in enumerate(self.train_cameras)]
             with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
@@ -190,6 +194,9 @@ class Scene:
 
             if self.gaussians is not None:
               # pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
+              # _, min_depths = visibility_depths(scan.expand_cameras(), np.asarray(pcd.points))
+              # base_scale = self.cameras_extent / 1000.0
+
               self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent)
 
     def save(self, iteration):
