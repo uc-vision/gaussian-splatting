@@ -442,12 +442,12 @@ class GaussianModel:
     def prune(self, min_opacity, max_screen_size, extent):
 
         min_opacity = (self.get_opacity < min_opacity).squeeze()
-
-        big_points_vs = self.max_radii2D > max_screen_size 
-        small_points_vs = (self.max_radii2D > 0) & (self.max_radii2D < 2.0)  
         big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
 
-        prune_mask = min_opacity | big_points_vs # | big_points_ws | small_points_vs
+        big_points_vs = self.max_radii2D > (max_screen_size or torch.inf)
+       # small_points_vs = (self.max_radii2D > 0) & (self.max_radii2D < 2.0)  
+
+        prune_mask = min_opacity  # | big_points_ws | small_points_vs
         self.prune_points(prune_mask)
 
         self.max_radii2D.fill_(0.0)
@@ -455,7 +455,6 @@ class GaussianModel:
 
         return dict(min_opacity=min_opacity.sum().item(),
                     big_points_vs=big_points_vs.sum().item(),
-                    small_points_vs=small_points_vs.sum().item(),
                     big_points_ws=big_points_ws.sum().item())
     
 
