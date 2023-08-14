@@ -367,20 +367,22 @@ class GaussianModel:
         self.ws_gradient_accum = self.pad_zeros(self.ws_gradient_accum, self._xyz.shape[0])
         self.vs_gradient_accum = self.pad_zeros(self.vs_gradient_accum, self._xyz.shape[0])
         
-def densify_and_split(self, grads, grad_threshold, size_threshold, N=2):
-        # Extract points that satisfy the gradient condition
-        grads = self.pad_zeros(grads, self.get_xyz.shape[0])
-
-        large_points = torch.max(self.get_scaling, dim=1).values > size_threshold
-        selected_pts_mask = (grads >= grad_threshold / 4) & large_points
-
-
-        stds = self.get_scaling[selected_pts_mask].repeat(N,1)
+    def sample_gaussians(self, mask, N):
+        stds = self.get_scaling[mask].repeat(N,1)
         means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
-        rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
-        new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
-      
+        rots = build_rotation(self._rotation[mask]).repeat(N,1,1)
+        new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[mask].repeat(N, 1)
+
+        return new_xyz
+
+    def densify_and_split(self, grads, grad_threshold, size_threshold, N=2):
+        # Extract points that satisfy the gradient condition
+
+        large_points = torch.max(self.get_scaling, dim=1).values > size_threshold
+        selected_pts_mask = (grads >= grad_threshold) & large_points
+
+        new_xyz = self.sample_gaussians(selected_pts_mask, N)
         new_scaling = self.scaling_inverse_activation(
              self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
 
@@ -395,46 +397,41 @@ def densify_and_split(self, grads, grad_threshold, size_threshold, N=2):
         return selected_pts_mask.sum()
 
 
-
-    def densify_and_clone(self, grads, grad_threshold, size_threshold, N=2):
-
+    def densify_and_clone(self, grads, grad_threshold, size_threshold):
 
         small_points = torch.max(self.get_scaling, dim=1).values < size_threshold
-        selected_pts_mask = (grads >= grad_threshold * 2) & small_points
+        selected_pts_mask = (grads >= grad_threshold) & small_points
 
-        stds = self.get_scaling[selected_pts_mask].repeat(N,1)
-        means = torch.zeros((stds.size(0), 3),device="cuda")
-        samples = torch.normal(mean=means, std=stds)
-        rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
-        new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
-      
-        new_scaling = self._scaling[selected_pts_mask].repeat(N,1) 
+        new_xyz = self._xyz[selected_pts_mask]
+        new_features_dc = self._features_dc[selected_pts_mask]
+        new_features_rest = self._features_rest[selected_pts_mask]
+        new_opacities = self._opacity[selected_pts_mask]
+        new_scaling = self._scaling[selected_pts_mask]
+        new_rotation = self._rotation[selected_pts_mask]
 
-        new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
-        new_features_dc = self._features_dc[selected_pts_mask].repeat(N,1,1)
-        new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
-        new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
-
-        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
+        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad, extent, min_vis_count=50):
-        valid = self.vis_count < min_vis_count
-
+    def densify(self, max_grad, extent, min_vis_count=10):
+        valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count
         grads[~valid] = 0.0
         
         self.vs_gradient_accum[valid] = 0.0
+        self.ws_gradient_accum[valid] = 0.0
         self.vis_count[valid] = 0.0
                     
         size_threshold =  self.percent_dense*extent
 
-        # cloned = self.densify_and_clone(grads, max_grad, extent)
-        stats = self.densify_and_split(grads, max_grad, extent)
-        return stats
+        cloned = self.densify_and_clone(grads, max_grad, size_threshold)
+
+        grads = self.pad_zeros(grads, self.get_xyz.shape[0])
+        splits = self.densify_and_split(grads, max_grad / 10, size_threshold)
+
+        return dict(cloned=cloned, split=splits, size_threshold=size_threshold)
 
     def prune(self, min_opacity, max_screen_size, extent):
 

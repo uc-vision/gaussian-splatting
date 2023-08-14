@@ -41,8 +41,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # first_iter = 0
 
-    iters_since_densification = 0
-
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
@@ -138,14 +136,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
-                t = (iteration - opt.densify_from_iter) / (opt.densify_until_iter - opt.densify_from_iter)
-                densification_interval = opt.densification_interval * (1 -t) + opt.final_densification_interval * t
-
-                if iteration >= opt.densify_from_iter and iters_since_densification > densification_interval:
-                    iters_since_densification = 0
+                if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     densify_stats = gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
 
-                    size_threshold = 100 if iteration > opt.opacity_reset_interval else None
+                    size_threshold = 40 if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold, extent=scene.cameras_extent)
 
                     for k, v in prune_stats.items():
@@ -155,8 +149,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                       tb_writer.add_scalar(f'densified/{k}', v, iteration)
 
                     torch.cuda.empty_cache()
-                else:
-                    iters_since_densification += 1
                 # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                 #     gaussians.reset_opacity()
             
