@@ -21,6 +21,14 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 
+# class ImageModel(nn.Module):
+#     def __init__(self, n:int):
+#       super(ImageModel, self).__init__()     
+
+#       self.   
+
+
+
 class GaussianModel:
 
     def setup_functions(self):
@@ -56,8 +64,6 @@ class GaussianModel:
 
         self.vis_count = torch.empty(0)
         self.optimizer = None
-        self.percent_dense = 0
-        self.spatial_lr_scale = 0
         self.setup_functions()
 
     def capture(self):
@@ -74,8 +80,7 @@ class GaussianModel:
             self.ws_gradient_accum,
             
             self.vis_count,
-            self.optimizer.state_dict(),
-            self.spatial_lr_scale,
+            self.optimizer.state_dict()
         )
     
     def restore(self, model_args, training_args):
@@ -90,8 +95,7 @@ class GaussianModel:
         vs_gradient_accum, 
         ws_gradient_accum,
         vis_count,
-        opt_dict, 
-        self.spatial_lr_scale) = model_args
+        opt_dict) = model_args
         
         self.training_setup(training_args)
         self.vs_gradient_accum = vs_gradient_accum
@@ -129,8 +133,7 @@ class GaussianModel:
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
 
-    def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float, scales:torch.Tensor = None):
-        self.spatial_lr_scale = spatial_lr_scale
+    def create_from_pcd(self, pcd : BasicPointCloud,  scales:torch.Tensor = None):
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
         features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
@@ -160,14 +163,13 @@ class GaussianModel:
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
     def training_setup(self, training_args):
-        self.percent_dense = training_args.percent_dense
         self.vs_gradient_accum = torch.zeros((self.get_xyz.shape[0]), device="cuda")
         self.ws_gradient_accum = torch.zeros(self.get_xyz.shape, device="cuda")
         
         self.vis_count = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
         l = [
-            {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
+            {'params': [self._xyz], 'lr': training_args.position_lr_init, "name": "xyz"},
             {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
             {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
@@ -176,8 +178,8 @@ class GaussianModel:
         ]
 
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
-        self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
-                                                    lr_final=training_args.position_lr_final*self.spatial_lr_scale,
+        self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init,
+                                                    lr_final=training_args.position_lr_final,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,
                                                     max_steps=training_args.position_lr_max_steps)
 
@@ -414,7 +416,7 @@ class GaussianModel:
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad, extent, min_vis_count=10):
+    def densify(self, max_grad, split_threshold, min_vis_count=50):
         valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count
@@ -424,31 +426,24 @@ class GaussianModel:
         self.ws_gradient_accum[valid] = 0.0
         self.vis_count[valid] = 0.0
                     
-        size_threshold =  self.percent_dense*extent
-
-        cloned = self.densify_and_clone(grads, max_grad, size_threshold)
-
+        cloned = self.densify_and_clone(grads, max_grad, split_threshold)
         grads = self.pad_zeros(grads, self.get_xyz.shape[0])
-        splits = self.densify_and_split(grads, max_grad / 10, size_threshold)
+        splits = self.densify_and_split(grads, max_grad / 2, split_threshold)
 
-        return dict(cloned=cloned, split=splits, size_threshold=size_threshold)
+        return dict(cloned=cloned, split=splits, size_threshold=split_threshold)
 
-    def prune(self, min_opacity, max_screen_size, extent):
+    def prune(self, min_opacity, max_screen_size):
 
         min_opacity = (self.get_opacity < min_opacity).squeeze()
-        big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
-
         big_points_vs = self.max_radii2D > (max_screen_size or torch.inf)
 
-        prune_mask = min_opacity  # | big_points_ws | small_points_vs
+        prune_mask = min_opacity | big_points_vs 
         self.prune_points(prune_mask)
 
         self.max_radii2D.fill_(0.0)
 
-
         return dict(min_opacity=min_opacity.sum().item(),
-                    big_points_vs=big_points_vs.sum().item(),
-                    big_points_ws=big_points_ws.sum().item())
+                    big_points_vs=big_points_vs.sum().item())
     
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
@@ -461,7 +456,7 @@ class GaussianModel:
 
     def get_regularization_loss(self):
         scaling = self.get_scaling
-        factors = (scaling.max(dim=1).values / scaling.median(dim=1).values) - 1.0
+        factors = (scaling.max(dim=1).values / scaling.min(dim=1).values) - 1.0
 
         return factors.mean() #(1 - self.get_opacity.mean()) 
         

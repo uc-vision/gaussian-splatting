@@ -36,7 +36,7 @@ class Camera(nn.Module):
             print(f"[Warning] Custom device {data_device} failed, fallback to default cuda device" )
             self.data_device = torch.device("cuda")
 
-        self.image = image.to(self.data_device)
+        self.image = image.pin_memory()
         self.width = self.original_image.shape[2]
         self.height = self.original_image.shape[1]
 
@@ -59,7 +59,7 @@ class Camera(nn.Module):
 
     @property
     def original_image(self):
-        return self.image.to(torch.float32) / 255
+        return self.image.to(device= self.data_device, dtype=torch.float32) / 255
 
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
