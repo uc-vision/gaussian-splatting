@@ -84,7 +84,7 @@ class OptimizationParams(ParamGroup):
         self.rotation_lr = 0.001
 
         self.split_threshold = 0.001 # 1mm
-        self.vs_threshold = 40 # large point threshold viewspace
+        self.vs_threshold = 60 # large point threshold viewspace
         self.lambda_dssim = 0.2
 
         self.reg_gaussians = 0.0

@@ -39,6 +39,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     opt.iterations = int(opt.iterations * opt.training_scale)
     opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
     opt.position_lr_max_steps = int(opt.position_lr_max_steps * opt.training_scale)
+    opt.densify_from_iter = int(opt.densify_from_iter * opt.training_scale)
     
     gaussians.training_setup(opt)
     if checkpoint:

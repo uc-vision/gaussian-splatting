@@ -160,7 +160,7 @@ class GaussianModel:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
 
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
 
     def step(self):
         with torch.no_grad():
@@ -278,7 +278,7 @@ class GaussianModel:
         self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
         self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
 
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.active_sh_degree = self.max_sh_degree
 
     def replace_tensor_to_optimizer(self, tensor, name):
@@ -446,7 +446,7 @@ class GaussianModel:
     def prune(self, min_opacity, max_screen_size):
 
         min_opacity = (self.get_opacity < min_opacity).squeeze()
-        big_points_vs = self.max_radii2D > (max_screen_size or torch.inf)
+        big_points_vs = (self.max_radii2D / self.get_opacity) > (max_screen_size or torch.inf)
 
         prune_mask = min_opacity | big_points_vs 
         self.prune_points(prune_mask)
