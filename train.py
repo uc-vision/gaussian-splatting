@@ -35,6 +35,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tb_writer = prepare_output_and_logger(dataset)
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+
+    opt.iterations = int(opt.iterations * opt.training_scale)
+    opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
+    opt.position_lr_max_steps = int(opt.position_lr_max_steps * opt.training_scale)
     
     gaussians.training_setup(opt)
     if checkpoint:
@@ -151,15 +155,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     densify_stats = gaussians.densify(opt.densify_grad_threshold, opt.split_threshold)
 
-                    max_dim = max(image.shape[1], image.shape[2])
 
-<<<<<<< HEAD
                     size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
-                    prune_stats = gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold)
-=======
-                    size_threshold = 0.2 * max_dim if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
->>>>>>> ac159c1a3ac142c87475637a164c68561befa907
 
                     for k, v in prune_stats.items():
                       tb_writer.add_scalar(f'pruned/{k}', v, iteration)
