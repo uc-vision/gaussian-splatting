@@ -153,8 +153,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                     max_dim = max(image.shape[1], image.shape[2])
 
+<<<<<<< HEAD
                     size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold)
+=======
+                    size_threshold = 0.2 * max_dim if iteration > opt.opacity_reset_interval else None
+                    prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
+>>>>>>> ac159c1a3ac142c87475637a164c68561befa907
 
                     for k, v in prune_stats.items():
                       tb_writer.add_scalar(f'pruned/{k}', v, iteration)
@@ -169,8 +174,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # Optimizer step
             if iteration < opt.iterations:
-                gaussians.optimizer.step()
-                gaussians.optimizer.zero_grad(set_to_none = True)
+                gaussians.step()
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))

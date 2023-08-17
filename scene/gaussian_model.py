@@ -162,6 +162,17 @@ class GaussianModel:
 
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
+    def step(self):
+        with torch.no_grad():
+            for group in self.optimizer.param_groups:
+                for param in group['params']:
+                  if param.grad is not None:
+                    param.grad = param.grad.to_sparse()
+                
+        self.optimizer.step()
+        self.optimizer.zero_grad(set_to_none = True)
+
+
     def training_setup(self, training_args):
         self.vs_gradient_accum = torch.zeros((self.get_xyz.shape[0]), device="cuda")
         self.ws_gradient_accum = torch.zeros(self.get_xyz.shape, device="cuda")
@@ -177,7 +188,7 @@ class GaussianModel:
             {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
         ]
 
-        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        self.optimizer = torch.optim.SparseAdam(l, lr=0.001, eps=1e-15)
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init,
                                                     lr_final=training_args.position_lr_final,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,
