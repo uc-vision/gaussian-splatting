@@ -35,6 +35,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tb_writer = prepare_output_and_logger(dataset)
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+    
     gaussians.training_setup(opt)
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
@@ -106,7 +107,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss += l1_loss(depth, gt_depth) * 0.1
         loss.backward()
 
-        print(viewpoint_cam.image_name, loss.item())
 
         iter_end.record()
 
@@ -153,7 +153,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                     max_dim = max(image.shape[1], image.shape[2])
 
-                    size_threshold = 0.2 * max_dim if iteration > opt.opacity_reset_interval else None
+                    size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold)
 
                     for k, v in prune_stats.items():

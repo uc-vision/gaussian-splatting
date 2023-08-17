@@ -416,7 +416,7 @@ class GaussianModel:
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad, split_threshold, min_vis_count=50):
+    def densify(self, max_grad, split_threshold, min_vis_count=10):
         valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count
@@ -428,7 +428,7 @@ class GaussianModel:
                     
         cloned = self.densify_and_clone(grads, max_grad, split_threshold)
         grads = self.pad_zeros(grads, self.get_xyz.shape[0])
-        splits = self.densify_and_split(grads, max_grad / 2, split_threshold)
+        splits = self.densify_and_split(grads, max_grad / 4, split_threshold)
 
         return dict(cloned=cloned, split=splits, size_threshold=split_threshold)
 
