@@ -106,7 +106,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss += l1_loss(depth, gt_depth) * 0.1
         loss.backward()
 
-        print(viewpoint_cam.image_name, loss.item())
+        # print(viewpoint_cam.image_name, loss.item())
 
         iter_end.record()
 
@@ -154,7 +154,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     max_dim = max(image.shape[1], image.shape[2])
 
                     size_threshold = 0.2 * max_dim if iteration > opt.opacity_reset_interval else None
-                    prune_stats = gaussians.prune(min_opacity=0.005, max_screen_size=size_threshold)
+                    prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
 
                     for k, v in prune_stats.items():
                       tb_writer.add_scalar(f'pruned/{k}', v, iteration)
@@ -169,8 +169,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # Optimizer step
             if iteration < opt.iterations:
-                gaussians.optimizer.step()
-                gaussians.optimizer.zero_grad(set_to_none = True)
+                gaussians.step()
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
