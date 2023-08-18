@@ -74,6 +74,7 @@ def main():
     if args.output is not None:
       args.output.parent.mkdir(parents=True, exist_ok=True)
       model.save_ply(str(args.output))
+      print(f"Wrote {args.output}")
 
     if args.show:
       points = model.get_xyz.cpu().numpy()
