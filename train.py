@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import torch
 from random import randint
+from scene.cameras import Camera
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
 import sys
@@ -34,6 +35,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tb_writer = prepare_output_and_logger(dataset)
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+
+    opt.iterations = int(opt.iterations * opt.training_scale)
+    opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
+    opt.position_lr_max_steps = int(opt.position_lr_max_steps * opt.training_scale)
+    opt.densify_from_iter = int(opt.densify_from_iter * opt.training_scale)
+    
     gaussians.training_setup(opt)
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
@@ -72,6 +79,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         iter_start.record()
 
+
         gaussians.update_learning_rate(iteration)
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
@@ -82,7 +90,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
 
-        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        viewpoint_cam:Camera = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        gt_image = viewpoint_cam.original_image.to(device='cuda', non_blocking=True)
+
         # gt_depth = viewpoint_cam.depth
         # Render
 
@@ -91,7 +101,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # depth = render_pkg["depth"]
 
         # Loss
-        gt_image = viewpoint_cam.original_image.cuda()
 
 
         Ll1 = l1_loss(image, gt_image)
@@ -102,6 +111,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))  + reg_loss  
         # loss += l1_loss(depth, gt_depth) * 0.1
         loss.backward()
+
 
         iter_end.record()
 
@@ -119,12 +129,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Log and save
             training_report(tb_writer, iteration, l1_loss, testing_iterations, scene, render, (pipe, background))
             if tb_writer:
-              tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-              tb_writer.add_scalar('train_loss_patches/reg_loss', reg_loss.item(), iteration)
+              tb_writer.add_scalar('train/l1_loss', Ll1.item(), iteration)
+              tb_writer.add_scalar('train/reg_loss', reg_loss.item(), iteration)
 
-              tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
-              tb_writer.add_scalar('iter_time', iter_start.elapsed_time(iter_end), iteration)
-              tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
+              tb_writer.add_scalar('train/total_loss', loss.item(), iteration)
+              tb_writer.add_scalar('train/time', iter_start.elapsed_time(iter_end), iteration)
+              
+              tb_writer.add_scalar('points/total', scene.gaussians.get_xyz.shape[0], iteration)
+
+              n_visible = visibility_filter.sum()
+              tb_writer.add_scalar('points/visible', n_visible, iteration)
+              tb_writer.add_scalar('points/percent_visible', 100.0 * (n_visible / scene.gaussians.get_xyz.shape[0]), iteration)
+
+
 
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
@@ -133,14 +150,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Densification
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
-                gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
+                gaussians.max_radii2D[visibility_filter, :] = torch.max(gaussians.max_radii2D[visibility_filter, :], radii[visibility_filter].unsqueeze(1))
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    densify_stats = gaussians.densify(opt.densify_grad_threshold,  scene.cameras_extent)
+                    densify_stats = gaussians.densify(opt.densify_grad_threshold, opt.split_threshold)
 
-                    size_threshold = 40 if iteration > opt.opacity_reset_interval else None
-                    prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold, extent=scene.cameras_extent)
+
+                    size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
+                    prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
 
                     for k, v in prune_stats.items():
                       tb_writer.add_scalar(f'pruned/{k}', v, iteration)
@@ -155,8 +173,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # Optimizer step
             if iteration < opt.iterations:
-                gaussians.optimizer.step()
-                gaussians.optimizer.zero_grad(set_to_none = True)
+                gaussians.step()
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))

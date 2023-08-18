@@ -48,11 +48,11 @@ def sample_spherical(npoints, ndim=3):
     return vec
 
 
-def add_bg_points(pcd, n_points=10000, radius=100.0):
-    dist = np.random.rand(n_points, 1) * radius
+def add_bg_points(pcd, n_points=10000, radius=100.0, near=2.):
+    dist = np.random.rand(n_points, 1) * radius + near
 
     points = sample_spherical(n_points) * dist
-    colors = np.ones_like(points)
+    colors = np.random.rand(n_points, 3)
 
     aug = o3d.geometry.PointCloud()
     aug.points=o3d.utility.Vector3dVector(np.concatenate([pcd.points, points]))
@@ -157,7 +157,7 @@ class Scene:
 
 
         scan = FrameSet.load(args.source_path).with_image_scale(args.resolution)
-        centre, self.cameras_extent = camera_extents(scan)
+        centre, cameras_extent = camera_extents(scan)
 
         undistortions = undistort_cameras(scan.cameras, alpha=0, centered=True)
         cameras = {k:dist.undistorted for k, dist in undistortions.items()}
@@ -193,11 +193,11 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
-              # pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
+              pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
               # _, min_depths = visibility_depths(scan.expand_cameras(), np.asarray(pcd.points))
               # base_scale = self.cameras_extent / 1000.0
 
-              self.gaussians.create_from_pcd(pcd, spatial_lr_scale=self.cameras_extent)
+              self.gaussians.create_from_pcd(pcd)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
