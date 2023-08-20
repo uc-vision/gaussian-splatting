@@ -48,6 +48,26 @@ class ColorCorrection(nn.Module):
       # x = torch.pow(x, 1 + self.gamma_offset[idx])
       # return F.conv2d(x, self.weight2[idx].view(3, 3, 1, 1), self.bias2[idx])
 
+class ModifySH(nn.Module):
+    def __init__(self, n:int, max_sh_degree : int):
+      super(ModifySH, self).__init__()     
+      features = (max_sh_degree + 1) ** 2
+
+      self.scale = nn.Parameter(torch.ones(n, features, 3).requires_grad_(True))
+      self.bias = nn.Parameter(torch.zeros(n, features, 3).requires_grad_(True))
+
+
+    def parameter_groups(self, lr):
+        return [
+            {'params': [self.scale, self.bias], 'lr': lr, "name": "weights"},
+        ]
+    
+    def forward(self, idx, sh):
+      sh = sh * self.scale[idx] + self.bias[idx]     
+      return sh
+      #return F.conv1d(sh.permute(0, 2, 1), self.weight[idx].view(3, 3, 1)).permute(0, 2, 1)
+
+
 class GaussianModel:
 
     def setup_functions(self):
@@ -85,6 +105,7 @@ class GaussianModel:
         self.optimizer = None
         self.image_optimizer = None
         self.correct_colors = None
+        self.transform_sh = None
         self.setup_functions()
 
     def capture(self):
@@ -146,6 +167,9 @@ class GaussianModel:
         features_rest = self._features_rest
         return torch.cat((features_dc, features_rest), dim=1)
     
+    def get_image_features(self, idx):
+        features = self.get_features
+        return self.transform_sh(idx, features)
 
     @property
     def get_opacity(self):
@@ -211,7 +235,10 @@ class GaussianModel:
         
         self.vis_count = torch.zeros((self.get_xyz.shape[0]), device="cuda")
         self.correct_colors = ColorCorrection(num_images)
+        self.transform_sh = ModifySH(num_images, self.max_sh_degree)
+
         self.correct_colors.to(device="cuda")
+        self.transform_sh.to(device="cuda")
 
         l = [
             {'params': [self._xyz], 'lr': training_args.position_lr_init, "name": "xyz"},
@@ -224,8 +251,9 @@ class GaussianModel:
         self.optimizer = torch.optim.SparseAdam(l, lr=0.001, eps=1e-15)
 
         self.image_optimizer = torch.optim.SparseAdam(
-            self.correct_colors.parameter_groups(training_args.image_color_lr)
-                    , lr=0.001, eps=1e-15)
+            self.correct_colors.parameter_groups(training_args.image_color_lr) 
+            + self.transform_sh.parameter_groups(training_args.transform_sh_lr),
+                     lr=0.001, eps=1e-15)
 
 
 
@@ -467,7 +495,7 @@ class GaussianModel:
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad, clone_threshold, split_threshold, min_vis_count=10):
+    def densify(self, max_grad_clone, max_grad_split, split_size_threshold, min_vis_count=10):
         valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count
@@ -477,11 +505,11 @@ class GaussianModel:
         self.ws_gradient_accum[valid] = 0.0
         self.vis_count[valid] = 0.0
                     
-        cloned = self.densify_and_clone(grads, max_grad, clone_threshold)
+        cloned = self.densify_and_clone(grads, max_grad_clone, split_size_threshold)
         grads = self.pad_zeros(grads, self.get_xyz.shape[0])
-        splits = self.densify_and_split(grads, max_grad, split_threshold)
+        splits = self.densify_and_split(grads, max_grad_split, split_size_threshold)
 
-        return dict(cloned=cloned, split=splits, size_threshold=split_threshold)
+        return dict(cloned=cloned, split=splits)
 
     def prune(self, min_opacity, max_screen_size):
 
