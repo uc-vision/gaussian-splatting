@@ -79,11 +79,15 @@ class OptimizationParams(ParamGroup):
         self.position_lr_delay_mult = 0.01
         self.position_lr_max_steps = 30_000
         self.feature_lr = 0.0025
+        self.feature_rest_lr_mul = 1/20.0
+        
         self.opacity_lr = 0.05
         self.scaling_lr =  0.005
         self.rotation_lr = 0.001
+        self.image_color_lr = 0.00001
 
-        self.split_threshold = 0.001 # 1mm
+        self.split_threshold = 0.01 # 1cm
+        
         self.vs_threshold = 60 # large point threshold viewspace
         self.lambda_dssim = 0.2
 
@@ -95,7 +99,12 @@ class OptimizationParams(ParamGroup):
         self.opacity_reset_interval = 3000
         self.densify_from_iter = 500
         self.densify_until_iter = 25_000
+
         self.densify_grad_threshold = 0.0002
+
+        # How much the split threshold is compared to clone threshold
+        self.clone_split_ratio = 1/4.0  
+
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):

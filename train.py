@@ -41,7 +41,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     opt.position_lr_max_steps = int(opt.position_lr_max_steps * opt.training_scale)
     opt.densify_from_iter = int(opt.densify_from_iter * opt.training_scale)
     
-    gaussians.training_setup(opt)
+    gaussians.training_setup(opt, len(scene.getTrainCameras()))
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -97,8 +97,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Render
 
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        image_raw, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         # depth = render_pkg["depth"]
+
+        image = gaussians.correct_colors(viewpoint_cam.uid, image_raw)
 
         # Loss
 
@@ -154,7 +156,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    densify_stats = gaussians.densify(opt.densify_grad_threshold, opt.split_threshold)
+                    densify_stats = gaussians.densify(opt.densify_grad_threshold, 
+                                                      opt.clone_split_ratio * opt.densify_grad_threshold,
+
+                                                      opt.split_threshold)
 
 
                     size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
