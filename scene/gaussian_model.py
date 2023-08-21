@@ -107,6 +107,7 @@ class GaussianModel:
         self.correct_colors = None
         self.transform_sh = None
         self.setup_functions()
+        self.num_images = 0
 
     def capture(self):
         return (
@@ -123,7 +124,8 @@ class GaussianModel:
             
             self.vis_count,
             self.optimizer.state_dict(),
-            self.image_optimizer.state_dict()
+            self.image_optimizer.state_dict(),
+            self.num_images
         )
     
     def restore(self, model_args, training_args):
@@ -139,15 +141,16 @@ class GaussianModel:
         ws_gradient_accum,
         vis_count,
         opt_dict,
-        dense_dict) = model_args
+        image_opt_dict,
+        num_images) = model_args
         
-        self.training_setup(training_args)
+        self.training_setup(training_args, num_images)
         self.vs_gradient_accum = vs_gradient_accum
         self.ws_gradient_accum = ws_gradient_accum
         
         self.vis_count = vis_count
         self.optimizer.load_state_dict(opt_dict)
-        self.image_optimizer.load_state_dict(dense_dict)
+        self.image_optimizer.load_state_dict(image_opt_dict)
 
     @property
     def get_scaling(self):
@@ -239,6 +242,8 @@ class GaussianModel:
 
         self.correct_colors.to(device="cuda")
         self.transform_sh.to(device="cuda")
+
+        self.num_images = num_images
 
         l = [
             {'params': [self._xyz], 'lr': training_args.position_lr_init, "name": "xyz"},
@@ -495,7 +500,7 @@ class GaussianModel:
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad_clone, max_grad_split, split_size_threshold, min_vis_count=10):
+    def densify(self, max_grad_clone, max_grad_split, split_size_threshold, min_vis_count=50):
         valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count

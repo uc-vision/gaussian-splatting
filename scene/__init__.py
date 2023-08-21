@@ -183,8 +183,8 @@ class Scene:
             with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
                 json.dump(json_cameras, file)
 
-            print(f"Writing images...")
-            write_images(self.model_path, self.train_cameras)
+            #print(f"Writing images...")
+            #write_images(self.model_path, self.train_cameras)
 
             scan_file = os.path.join(self.model_path, "scene.json")
             scan = scan.with_model("sparse", "input.ply")
@@ -193,7 +193,7 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
-              pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
+              # pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
               # _, min_depths = visibility_depths(scan.expand_cameras(), np.asarray(pcd.points))
               # base_scale = self.cameras_extent / 1000.0
 
