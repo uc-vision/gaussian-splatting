@@ -46,7 +46,7 @@ def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:
   return Gaussians(
     positions = torch.from_numpy(positions),
     sh_dc = get_keys([f'f_dc_{k}' for k in range(3)]),
-    sh_rest = get_keys([f'f_rest_{k}' for k in range(9)]),
+    sh_rest = get_keys([f'f_rest_{k}' for k in range(3 * (sh_degree * sh_degree - 1))]),
     scaling = get_keys([f'scale_{k}' for k in range(3)]),
     rotation = get_keys([f'rot_{k}' for k in range(4)]),
     opacity = get_keys(['opacity'])
@@ -59,6 +59,9 @@ def write_gaussians(filename:str, gaussians:Gaussians):
 
 def read_gaussians(filename:str) -> Gaussians:
   pcd:o3d.t.geometry.PointCloud = o3d.t.io.read_point_cloud(filename)
+  if not 'positions' in pcd.point:
+    raise ValueError(f"Could not load point cloud from {filename}")
+
   return from_pcd(pcd)
   
 
