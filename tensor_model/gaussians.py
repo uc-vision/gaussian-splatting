@@ -1,5 +1,5 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from tensorclass import TensorClass
 import torch
@@ -46,6 +46,26 @@ class Gaussians(TensorClass):
   @property
   def opacity(self):
     return torch.sigmoid(self.opacity_logit)
+  
+  @property
+  def sh_degree(self):
+    n_sh = 1 + (self.sh_rest.shape[1]) // 3
+    sh_degree = int(math.sqrt(n_sh))
+
+    assert sh_degree * sh_degree == n_sh, f"SH feature count must be square, got {n_sh} ({self.sh_rest.shape})"
+    return sh_degree
+
+  @property
+  def with_inc_degree(self) -> 'Gaussians':
+    sh_degree = self.sh_degree
+    assert sh_degree < 4, "SH degree cannot exceed 4"
+
+    n = 3 * (sh_degree * sh_degree)
+    sh_rest = torch.zeros(dtype=self.sh_rest.dtype, device=self.sh_rest.device, size=(self.sh_rest.shape[0], n))
+    sh_rest[:, :self.sh_rest.shape[1]] = self.sh_rest
+
+    return replace(self, sh_rest=sh_rest)
+
 
   @typechecked
   @staticmethod

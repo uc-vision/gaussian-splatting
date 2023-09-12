@@ -14,7 +14,7 @@ def quat_to_mat(q:vec4) -> mat3:
   )
 
 @ti.kernel
-def quat_to_mat_kernel(q:ti.types.ndarray(4, dtype=ti.f32), m:ti.types.ndarray(9, dtype=ti.f32)):
+def quat_to_mat_kernel(q:ti.types.ndarray(ndim=1, dtype=vec4), m:ti.types.ndarray(ndim=1, dtype=mat3)):
   for i in range(0, q.shape[0]):
     m[i] = quat_to_mat(ti.math.normalize(q[i]))
 

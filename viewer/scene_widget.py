@@ -13,7 +13,7 @@ from viewer.scene import Scene
 class Settings:
   update_rate : int = 60
   move_speed : float = 1.0
-  rotate_speed : float = 2.0
+  rotate_speed : float = .0
   
 
 

@@ -22,7 +22,7 @@ class Window(QtWidgets.QMainWindow):
 
 def process_cl_args():
     parser = argparse.ArgumentParser()
-    # parser.add_argument('filename')  # positional argument
+    parser.add_argument('filename')  # positional argument
 
     parsed_args, unparsed_args = parser.parse_known_args()
     return parsed_args, unparsed_args
