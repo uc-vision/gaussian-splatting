@@ -21,6 +21,8 @@ def find_cloud(p:Path):
 
 
 def main():
+  torch.set_printoptions(precision=4, sci_mode=False, linewidth=200)
+
   parser = argparse.ArgumentParser()
   parser.add_argument('input', type=Path)
   

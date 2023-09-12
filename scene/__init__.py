@@ -31,7 +31,6 @@ from camera_geometry.scan.views import load_frames_with, undistort_cameras, Came
 from camera_geometry.transforms import translate_44
 from tqdm import tqdm
 
-from scan_tools.crop_points import visibility_depths
 
 import open3d as o3d
 import cv2
