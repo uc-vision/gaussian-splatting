@@ -6,6 +6,8 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from viewer.scene_widget import SceneWidget
 
+
+
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
