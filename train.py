@@ -117,7 +117,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         name = viewpoint_cam.image_name
         if name in per_image_l1:
-          per_image_l1[name] = 0.8 * per_image_l1[name] + 0.8 * Ll1.detach().item()
+          per_image_l1[name] = 0.8 * per_image_l1[name] + 0.2 * Ll1.detach().item()
         else:
           per_image_l1[name] = Ll1.detach().item()
 
