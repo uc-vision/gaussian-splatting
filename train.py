@@ -151,7 +151,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
               tb_writer.add_scalar('points/percent_visible', 100.0 * (n_visible / scene.gaussians.get_xyz.shape[0]), iteration)
 
             if iteration in testing_iterations and len(per_image_l1) > 0:
-              tb_writer.add_histogram('images/l1_loss', torch.Tensor(list(per_image_l1.values())))
+              tb_writer.add_histogram('images/l1_loss', torch.Tensor(list(per_image_l1.values())), iteration)
 
              
 
