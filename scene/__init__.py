@@ -162,8 +162,13 @@ class Scene:
         undistortions = undistort_cameras(scan.cameras, alpha=0, centered=True)
         cameras = {k:dist.undistorted for k, dist in undistortions.items()}
 
-        scan = scan.transform(translate_44(-centre[0], -centre[1], -centre[2])).with_cameras(cameras)
+        scan = scan.transform(translate_44(-centre[0], -centre[1], -centre[2])).copy(cameras=cameras)
         pcd = load_cloud(scan).translate(-centre)
+
+        print("Undistorted cameras:")
+        for k, camera in scan.cameras.items():
+            print(k, camera)
+
 
         print("Loading images...")
         self.train_cameras = load_cameras(scan, undistortions)
@@ -193,7 +198,7 @@ class Scene:
             scan.save(scan_file)
 
             if self.gaussians is not None:
-              # pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=2000.0)
+              pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=1000.0)
               # _, min_depths = visibility_depths(scan.expand_cameras(), np.asarray(pcd.points))
               # base_scale = self.cameras_extent / 1000.0
 

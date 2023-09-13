@@ -73,7 +73,7 @@ class OptimizationParams(ParamGroup):
         self.iterations = 30_000
         self.training_scale = 1.0
         
-        self.position_lr_init =  0.00016
+        self.position_lr_init = 0.1 * 0.00016
         self.position_lr_final =  0.0000016
 
         self.position_lr_delay_mult = 0.01
@@ -86,10 +86,10 @@ class OptimizationParams(ParamGroup):
         self.rotation_lr = 0.001
         
         self.image_color_lr = 0.00001
-        self.transform_sh_lr = 0.001
+        self.transform_sh_lr = 0.0001
 
         
-        self.vs_threshold = 200 # large point threshold viewspace
+        self.vs_threshold = 400 # large point threshold viewspace
         self.lambda_dssim = 0.2
 
         self.reg_gaussians = 0.0

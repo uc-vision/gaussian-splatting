@@ -35,6 +35,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tb_writer = prepare_output_and_logger(dataset)
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+    per_image_l1 = {}
 
     opt.iterations = int(opt.iterations * opt.training_scale)
     opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
@@ -114,6 +115,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss += l1_loss(depth, gt_depth) * 0.1
         loss.backward()
 
+        name = viewpoint_cam.image_name
+        if name in per_image_l1:
+          per_image_l1[name] = 0.8 * per_image_l1[name] + 0.8 * Ll1.detach().item()
+        else:
+          per_image_l1[name] = Ll1.detach().item()
+
 
         iter_end.record()
 
@@ -143,7 +150,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
               tb_writer.add_scalar('points/visible', n_visible, iteration)
               tb_writer.add_scalar('points/percent_visible', 100.0 * (n_visible / scene.gaussians.get_xyz.shape[0]), iteration)
 
+            if iteration in testing_iterations and len(per_image_l1) > 0:
+              tb_writer.add_histogram('images/l1_loss', torch.Tensor(list(per_image_l1.values())))
 
+             
 
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
