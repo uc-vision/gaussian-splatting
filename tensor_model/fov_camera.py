@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -9,24 +10,31 @@ import json
 @dataclass
 class FOVCamera:
    
-  camera_t_world: np.ndarray
-  fovH : float
+  position: np.ndarray
+  rotation: np.ndarray
+  focal_length : float
   image_size : Tuple[int, int]
 
+  image_name: str
+  near:float  = 0.1
+  far :float  = 200.0
 
-  @property   
-  def projection_ndc(self, near, far):
-    fx = 0.5 * math.tan(self.fovH / 2)  
-    fy = fx * self.aspect 
+  @property
+  def ndc_t_camera(self):
 
     z_sign = 1.0
-    z = z_sign * far / (far - near)
-    w = -z_sign * far * near / (far - near)
+
+    f = self.focal_length
+    w, h = self.image_size
+
+    z_scale = z_sign * self.far / (self.far - self.near)
+    z_off = -z_sign * self.far * self.near / (self.far - self.near)
+
 
     return np.array(
-      [[fx, 0,  0,  0],
-        [0, fy, 0,  0],
-        [0, 0,  z,  w],
+      [[f / w, 0,  0,  0],
+        [0, f / h, 0,  0],
+        [0, 0,  z_scale,  z_off],
         [0, 0,  1,  0]]
     )
   
@@ -35,25 +43,76 @@ class FOVCamera:
     width, height = self.image_size
     return width / height
   
+  @property 
+  def resized(self, scale_factor) -> 'FOVCamera':
+    width = round(width * scale_factor)
+    height = round(height * scale_factor)
+
+    width, height = self.image_size
+    return replace(self,
+      image_size=(width, height),
+      focal_length=self.focal_length * scale_factor
+    )
+    
+
   @property
-  def location(self):
-    return self.camera_t_world[:, 3]
+  def world_t_camera(self):
+    return join_rt(self.rotation, self.position)
+  
+  @property
+  def camera_t_world(self):
+    return np.linalg.inv(self.world_t_camera)
+  
+  @property
+  def ndc_t_world(self):
+    return self.ndc_t_camera @ self.camera_t_world
+
+  @property
+  def fov(self):
+    return tuple(math.atan2(x, self.focal_length * 2) * 2 for x in self.image_size)
   
   @property
   def intrinsic(self):
     
     width, height = self.image_size
-    fx = width * (0.5 * math.tan(self.fovH / 2))
-    fy = fx * self.aspect
+    f = self.focal_length
 
     return np.array(
-      [[fx, 0,  width / 2],
-        [0, fy, height / 2],
+      [[f, 0,  width / 2],
+        [0, f, height / 2],
         [0, 0,  1]]
     )
-         
-   
+  
+def join_rt(R, T):
+  Rt = np.zeros((4, 4))
+  Rt[:3, :3] = R
+  Rt[:3, 3] = T
+  Rt[3, 3] = 1.0
 
-def load_json_cameras(filename):
-  with open(filename) as f:
-    data = json.load(f)
+  return Rt
+         
+
+def split_rt(Rt):
+  R = Rt[:3, :3]
+  T = Rt[:3, 3]
+  return R, T
+
+
+def from_json(camera_info) -> Tuple[FOVCamera, Path]:
+  pos = np.array(camera_info['position'])
+  rotation = np.array(camera_info['rotation']).reshape(3, 3)
+
+  return FOVCamera(
+    position=pos,
+    rotation=rotation,
+    image_size=(camera_info['width'], camera_info['height']),
+    focal_length=camera_info['fx'],
+    image_name=camera_info['img_name']
+  )
+
+
+
+def load_camera_json(filename:Path):
+  cameras = json.loads(filename.read_text())
+  return {camera_info['id']: from_json(camera_info) for camera_info in cameras}
+  

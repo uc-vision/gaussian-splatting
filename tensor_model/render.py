@@ -4,12 +4,12 @@ from natsort import natsorted
 import numpy as np
 import open3d as o3d
 import torch
-from tensor_model.fov_camera import FOVCamera
+from .fov_camera import FOVCamera, load_camera_json
+from .loading import from_pcd
 
-from tensor_model.loading import from_pcd
 from camera_geometry.scan import FrameSet, Camera
 
-from .renderer import render
+from .renderer import render, to_camera
 
 
 def find_cloud(p:Path):
@@ -26,13 +26,15 @@ def camera_to_fov(camera:Camera) -> FOVCamera:
    assert camera.has_distortion == False, "Simple FOV camera does not have distortion"
   
    return FOVCamera(
-      fov = camera.fov,
-      camera_t_world = camera.camera_t_parent,
-      image_size = camera.image_size
+      focal_length = camera.focal_length[0],
+      position = camera.location,
+      rotation = camera.rotation,
+      image_size = camera.image_size,
+      image_name = ""
     )
    
 
-   
+
 
 
 def main():
@@ -44,7 +46,6 @@ def main():
   
   args = parser.parse_args()
 
-
   cloud_filename = find_cloud(args.input / 'point_cloud')
   print("Loading", cloud_filename)
 
@@ -54,8 +55,29 @@ def main():
   gaussians = from_pcd(pcd)
 
   cameras = scene.expand_cameras()
-  for camera in cameras:
-    render(camera, gaussians, bg_color=torch.Tensor(0, 0, 0))
+  cameras2 = load_camera_json(args.input / 'cameras.json')
+
+  for camera1, (k, camera2) in zip(cameras, cameras2.items()):
+    fov = camera_to_fov(camera1)
+
+    # view, proj, pos = [torch.from_numpy(t).to(device=device, dtype=torch.float32) 
+    #         for t in (camera.camera_t_parent, np.linalg.inv(camera.projection), camera.location)]
+
+
+    spcam = to_camera(0, camera1)
+
+    print("view\n", spcam.world_view_transform,  fov.camera_t_world.transpose(1, 0))
+
+
+    print("view\n", spcam.projection_matrix, "\n", fov.ndc_t_camera)
+        
+    # print("???", camera1.parent_t_camera, camera1.location)
+
+    # print("view\n", spcam.world_view_transform, "\n", fov.camera_t_world.transpose(1, 0))
+
+
+    exit(0)
+    # render(camera, gaussians, bg_color=torch.Tensor(0, 0, 0))
 
   
 
