@@ -1,5 +1,8 @@
 from dataclasses import dataclass, replace
 import math
+
+from camera_geometry import Camera
+
 from pathlib import Path
 from typing import Tuple
 
@@ -28,14 +31,13 @@ class FOVCamera:
     w, h = self.image_size
 
     z_scale = z_sign * self.far / (self.far - self.near)
-    z_off = -z_sign * self.far * self.near / (self.far - self.near)
-
+    z_off =  -(self.far * self.near) / (self.far - self.near)
 
     return np.array(
-      [[f / w, 0,  0,  0],
-        [0, f / h, 0,  0],
+      [[2 * f / w, 0,  0,  0],
+        [0, 2 * f / h, 0,  0],
         [0, 0,  z_scale,  z_off],
-        [0, 0,  1,  0]]
+        [0, 0,  z_sign,  0]]
     )
   
   @property
@@ -96,6 +98,19 @@ def split_rt(Rt):
   R = Rt[:3, :3]
   T = Rt[:3, 3]
   return R, T
+
+
+
+def camera_to_fov(camera:Camera) -> FOVCamera:
+  assert camera.has_distortion == False, "Simple FOV camera does not have distortion"
+  R, T = split_rt(camera.camera_t_parent)
+
+  return FOVCamera(
+    position = T,
+    rotation = R,
+    focal_length = camera.focal_length[0],
+    image_size = camera.image_size
+  )
 
 
 def from_json(camera_info) -> Tuple[FOVCamera, Path]:
