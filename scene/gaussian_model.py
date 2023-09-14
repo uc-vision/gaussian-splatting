@@ -21,12 +21,51 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 
-# class ImageModel(nn.Module):
-#     def __init__(self, n:int):
-#       super(ImageModel, self).__init__()     
+from torch.nn import functional as F
 
-#       self.   
+class ColorCorrection(nn.Module):
+    def __init__(self, n:int):
+      super(ColorCorrection, self).__init__()     
 
+      self.weight1 = nn.Parameter(torch.eye(3).repeat(n, 1, 1).requires_grad_(True))
+      self.bias1 = nn.Parameter(torch.zeros(n, 3).requires_grad_(True))
+
+      self.gamma_offset = nn.Parameter(torch.zeros(n, 1).requires_grad_(True))
+
+      self.weight2 = nn.Parameter(torch.eye(3).repeat(n, 1, 1).requires_grad_(True))
+      self.bias2 = nn.Parameter(torch.zeros(n, 3).requires_grad_(True))
+
+
+    def parameter_groups(self, lr):
+        return [
+            {'params': [self.weight1, self.bias1, self.weight2, self.bias2], 
+             'lr': lr, "name": "weights"},
+            {'params': [self.gamma_offset], 'lr': lr * 0.01, "name": "gamma", "weight_decay": 1e-6} 
+        ]
+
+    def forward(self, idx, image):
+      return F.conv2d(image, self.weight1[idx].view(3, 3, 1, 1), self.bias1[idx])
+      # x = torch.pow(x, 1 + self.gamma_offset[idx])
+      # return F.conv2d(x, self.weight2[idx].view(3, 3, 1, 1), self.bias2[idx])
+
+class ModifySH(nn.Module):
+    def __init__(self, n:int, max_sh_degree : int):
+      super(ModifySH, self).__init__()     
+      features = (max_sh_degree + 1) ** 2
+
+      self.scale = nn.Parameter(torch.ones(n, features, 3).requires_grad_(True))
+      self.bias = nn.Parameter(torch.zeros(n, features, 3).requires_grad_(True))
+
+
+    def parameter_groups(self, lr):
+        return [
+            {'params': [self.scale, self.bias], 'lr': lr, "name": "weights"},
+        ]
+    
+    def forward(self, idx, sh):
+      sh = sh * self.scale[idx] + self.bias[idx]     
+      return sh
+      #return F.conv1d(sh.permute(0, 2, 1), self.weight[idx].view(3, 3, 1)).permute(0, 2, 1)
 
 
 class GaussianModel:
@@ -64,7 +103,11 @@ class GaussianModel:
 
         self.vis_count = torch.empty(0)
         self.optimizer = None
+        self.image_optimizer = None
+        self.correct_colors = None
+        self.transform_sh = None
         self.setup_functions()
+        self.num_images = 0
 
     def capture(self):
         return (
@@ -80,7 +123,9 @@ class GaussianModel:
             self.ws_gradient_accum,
             
             self.vis_count,
-            self.optimizer.state_dict()
+            self.optimizer.state_dict(),
+            self.image_optimizer.state_dict(),
+            self.num_images
         )
     
     def restore(self, model_args, training_args):
@@ -95,14 +140,17 @@ class GaussianModel:
         vs_gradient_accum, 
         ws_gradient_accum,
         vis_count,
-        opt_dict) = model_args
+        opt_dict,
+        image_opt_dict,
+        num_images) = model_args
         
-        self.training_setup(training_args)
+        self.training_setup(training_args, num_images)
         self.vs_gradient_accum = vs_gradient_accum
         self.ws_gradient_accum = ws_gradient_accum
         
         self.vis_count = vis_count
         self.optimizer.load_state_dict(opt_dict)
+        self.image_optimizer.load_state_dict(image_opt_dict)
 
     @property
     def get_scaling(self):
@@ -122,6 +170,10 @@ class GaussianModel:
         features_rest = self._features_rest
         return torch.cat((features_dc, features_rest), dim=1)
     
+    def get_image_features(self, idx):
+        features = self.get_features
+        return self.transform_sh(idx, features)
+
     @property
     def get_opacity(self):
         return self.opacity_activation(self._opacity) 
@@ -160,35 +212,56 @@ class GaussianModel:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
 
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
 
-    def step(self):
+    def to_sparse(self, optimizer):
         with torch.no_grad():
-            for group in self.optimizer.param_groups:
+            for group in optimizer.param_groups:
                 for param in group['params']:
                   if param.grad is not None:
                     param.grad = param.grad.to_sparse()
+
+    def step(self):
+        self.to_sparse(self.optimizer)
+        self.to_sparse(self.image_optimizer)
                 
         self.optimizer.step()
         self.optimizer.zero_grad(set_to_none = True)
 
+        self.image_optimizer.step()
+        self.image_optimizer.zero_grad(set_to_none = True)
 
-    def training_setup(self, training_args):
+
+    def training_setup(self, training_args, num_images):
         self.vs_gradient_accum = torch.zeros((self.get_xyz.shape[0]), device="cuda")
         self.ws_gradient_accum = torch.zeros(self.get_xyz.shape, device="cuda")
         
         self.vis_count = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.correct_colors = ColorCorrection(num_images)
+        self.transform_sh = ModifySH(num_images, self.max_sh_degree)
+
+        self.correct_colors.to(device="cuda")
+        self.transform_sh.to(device="cuda")
+
+        self.num_images = num_images
 
         l = [
             {'params': [self._xyz], 'lr': training_args.position_lr_init, "name": "xyz"},
             {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
-            {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
+            {'params': [self._features_rest], 'lr': training_args.feature_lr * training_args.feature_rest_lr_mul, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
             {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
-            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
+            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
         ]
-
         self.optimizer = torch.optim.SparseAdam(l, lr=0.001, eps=1e-15)
+
+        self.image_optimizer = torch.optim.SparseAdam(
+            self.correct_colors.parameter_groups(training_args.image_color_lr) 
+            + self.transform_sh.parameter_groups(training_args.transform_sh_lr),
+                     lr=0.001, eps=1e-15)
+
+
+
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init,
                                                     lr_final=training_args.position_lr_final,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,
@@ -278,7 +351,7 @@ class GaussianModel:
         self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
         self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
 
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.active_sh_degree = self.max_sh_degree
 
     def replace_tensor_to_optimizer(self, tensor, name):
@@ -427,7 +500,7 @@ class GaussianModel:
         return selected_pts_mask.sum()
 
 
-    def densify(self, max_grad, split_threshold, min_vis_count=50):
+    def densify(self, max_grad_clone, max_grad_split, split_size_threshold, min_vis_count=50):
         valid = self.vis_count > min_vis_count
 
         grads = self.vs_gradient_accum / self.vis_count
@@ -437,19 +510,20 @@ class GaussianModel:
         self.ws_gradient_accum[valid] = 0.0
         self.vis_count[valid] = 0.0
                     
-        cloned = self.densify_and_clone(grads, max_grad, split_threshold)
+        cloned = self.densify_and_clone(grads, max_grad_clone, split_size_threshold)
         grads = self.pad_zeros(grads, self.get_xyz.shape[0])
-        splits = self.densify_and_split(grads, max_grad / 2, split_threshold)
+        splits = self.densify_and_split(grads, max_grad_split, split_size_threshold)
 
-        return dict(cloned=cloned, split=splits, size_threshold=split_threshold)
+        return dict(cloned=cloned, split=splits)
 
     def prune(self, min_opacity, max_screen_size):
 
-        min_opacity = (self.get_opacity < min_opacity).squeeze()
-        big_points_vs = self.max_radii2D > (max_screen_size or torch.inf)
+        min_opacity = (self.get_opacity < min_opacity)
+        big_points_vs = self.max_radii2D > (max_screen_size or torch.inf) 
+
 
         prune_mask = min_opacity | big_points_vs 
-        self.prune_points(prune_mask)
+        self.prune_points(prune_mask.squeeze(1))
 
         self.max_radii2D.fill_(0.0)
 

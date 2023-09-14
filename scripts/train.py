@@ -35,7 +35,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tb_writer = prepare_output_and_logger(dataset)
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
-    gaussians.training_setup(opt)
+
+    opt.iterations = int(opt.iterations * opt.training_scale)
+    opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
+    opt.position_lr_max_steps = int(opt.position_lr_max_steps * opt.training_scale)
+    opt.densify_from_iter = int(opt.densify_from_iter * opt.training_scale)
+    
+    gaussians.training_setup(opt, len(scene.getTrainCameras()))
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -94,6 +100,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         # depth = render_pkg["depth"]
 
+        # image = gaussians.correct_colors(viewpoint_cam.uid, image_raw)
+
         # Loss
 
 
@@ -106,7 +114,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss += l1_loss(depth, gt_depth) * 0.1
         loss.backward()
 
-        # print(viewpoint_cam.image_name, loss.item())
 
         iter_end.record()
 
@@ -145,15 +152,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Densification
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
-                gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
+                gaussians.max_radii2D[visibility_filter, :] = torch.max(gaussians.max_radii2D[visibility_filter, :], radii[visibility_filter].unsqueeze(1))
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration >= opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    densify_stats = gaussians.densify(opt.densify_grad_threshold, opt.split_threshold)
+                    densify_stats = gaussians.densify(max_grad_clone = opt.densify_grad_threshold, 
+                                                      max_grad_split = opt.clone_split_ratio * opt.densify_grad_threshold,
+                                                      split_size_threshold=opt.split_size_threshold)
 
-                    max_dim = max(image.shape[1], image.shape[2])
 
-                    size_threshold = 0.2 * max_dim if iteration > opt.opacity_reset_interval else None
+                    size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
                     prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
 
                     for k, v in prune_stats.items():
@@ -222,8 +230,8 @@ def training_report(tb_writer, iteration, l1_loss, testing_iterations, scene : S
                         if iteration == testing_iterations[0]:
                             tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
 
-                    l1_test += l1_loss(image, gt_image).mean().double()
-                    psnr_test += psnr(image, gt_image).mean().double()
+                    l1_test += l1_loss(image, gt_image).mean()
+                    psnr_test += psnr(image, gt_image).mean()
                 psnr_test /= len(config['cameras'])
                 l1_test /= len(config['cameras'])          
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config['name'], l1_test, psnr_test))

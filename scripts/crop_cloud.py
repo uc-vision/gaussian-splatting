@@ -22,7 +22,7 @@ def load_cropped(args, op:OptimizationParams):
   pos = model.get_xyz
   scan = FrameSet.load(args.scan)
 
-  counts = visibility(scan.expand_cameras(), pos.cpu().numpy(), (0., args.max_depth))
+  counts = visibility(scan.expand_cameras(), pos.cpu().numpy(), (args.min_depth, args.max_depth))
 
   # roi = scan_roi(scan.expand_cameras(), pos.cpu().numpy(), max_depth = args.max_depth, 
   #                min_views = max(1, scan.total_views * args.proportion / 100), margin_percent=20, trim_percentile=2, aligned=True)
@@ -49,11 +49,11 @@ def main():
   parser.add_argument("--scan", type=str,  help="Input scan file")
   
   parser.add_argument("--max_depth", default=20.0, type=float, help="Max depth to determine the visible ROI")
+  parser.add_argument("--min_depth", default=0.2, type=float, help="Min depth to determine the visible ROI")
   parser.add_argument("--proportion", type=float, default=0, help="Minimum proportion of views to be included")
   parser.add_argument("--max_size", type=float, default=0.05, help="Cull points of large size")
 
   parser.add_argument("--output", type=Path,  help="Write cropped ply file")
-  parser.add_argument("--write", action="store_true",  help="Write cropped ply file as iteration_cropped")
 
   parser.add_argument("--show", action="store_true")
 
@@ -63,7 +63,7 @@ def main():
   if args.scan is None:
     args.scan = str(args.cloud.parent.parent.parent / "scene.json")
 
-  if args.write:
+  if args.output is None:
     args.output = args.cloud.parent.parent / "iteration_cropped" / "point_cloud.ply"
 
   op = op.extract(args)
@@ -74,6 +74,7 @@ def main():
     if args.output is not None:
       args.output.parent.mkdir(parents=True, exist_ok=True)
       model.save_ply(str(args.output))
+      print(f"Wrote {args.output}")
 
     if args.show:
       points = model.get_xyz.cpu().numpy()
