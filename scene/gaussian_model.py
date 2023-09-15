@@ -172,7 +172,10 @@ class GaussianModel:
     
     def get_image_features(self, idx):
         features = self.get_features
-        return self.transform_sh(idx, features)
+        if self.transform_sh is not None:
+          return self.transform_sh(idx, features)
+        else:
+          return features
 
     @property
     def get_opacity(self):
