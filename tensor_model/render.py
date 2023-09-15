@@ -41,6 +41,7 @@ def main():
 
   parser = argparse.ArgumentParser()
   parser.add_argument('input', type=Path)
+  parser.add_argument('--device', default='cuda')
   
   args = parser.parse_args()
 
@@ -50,7 +51,9 @@ def main():
   pcd = o3d.t.io.read_point_cloud(str(cloud_filename))
   # scene = FrameSet.load_file(args.input / 'scene.json')
 
-  gaussians = from_pcd(pcd)
+  device = torch.device(args.device)
+
+  gaussians = from_pcd(pcd).to(device)
   cameras = load_camera_json(args.input / 'cameras.json')
 
   for k, camera in cameras.items():

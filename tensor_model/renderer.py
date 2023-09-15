@@ -14,6 +14,9 @@ import numpy as np
 def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
   
     device = model.device
+    assert device != torch.device("cpu"), "CPU rendering is not supported."
+
+
     view, proj, pos = [torch.from_numpy(t).to(device=device, dtype=torch.float32) 
             for t in (camera.camera_t_world, camera.ndc_t_world, camera.position)]
 
