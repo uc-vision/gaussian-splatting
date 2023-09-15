@@ -19,7 +19,7 @@ def find_cloud(p:Path):
   if len(clouds) == 0:
     raise FileNotFoundError(f"No point clouds found in {str(p)}")
 
-  return clouds[0]
+  return clouds[-1]
 
 
 def camera_to_fov(camera:Camera) -> FOVCamera:
@@ -57,7 +57,8 @@ def main():
   cameras = load_camera_json(args.input / 'cameras.json')
 
   for k, camera in cameras.items():
-    render(camera, gaussians, bg_color=torch.Tensor(0, 0, 0))
+    print(camera.image_name)
+    render(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
 
   
 

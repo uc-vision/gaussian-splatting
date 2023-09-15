@@ -128,6 +128,7 @@ def from_json(camera_info) -> Tuple[FOVCamera, Path]:
 
 
 def load_camera_json(filename:Path):
-  cameras = json.loads(filename.read_text())
+  cameras = sorted(json.loads(filename.read_text()), key=lambda x: x['id'])
+
   return {camera_info['id']: from_json(camera_info) for camera_info in cameras}
   

@@ -45,7 +45,7 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
       means2D.requires_grad_(True).retain_grad()
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
-    rendered_image, radii, depth = rasterizer(
+    rendered_image, radii = rasterizer(
         means2D = means2D,
         means3D = model.positions,
         shs = model.sh_features,
@@ -58,5 +58,4 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
             "visibility_filter" : radii > 0,
-            "radii": radii,
-            "depth": depth}
+            "radii": radii}

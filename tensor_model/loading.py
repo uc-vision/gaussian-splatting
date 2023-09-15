@@ -39,14 +39,14 @@ def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:
   sh_attrs = [k for k in attrs if k.startswith('f_rest_') or k.startswith('f_dc_')]
   
   n_sh = len(sh_attrs) // 3
-  sh_degree = int(np.sqrt(n_sh))
+  deg = int(np.sqrt(n_sh))
 
-  assert sh_degree * sh_degree == n_sh, "SH feature count must be square"
+  assert deg * deg == n_sh, "SH feature count must be square"
 
   return Gaussians(
     positions = torch.from_numpy(positions),
     sh_dc = get_keys([f'f_dc_{k}' for k in range(3)]),
-    sh_rest = get_keys([f'f_rest_{k}' for k in range(3 * (sh_degree * sh_degree - 1))]),
+    sh_rest = get_keys([f'f_rest_{k}' for k in range(3 * (deg * deg - 1))]).view(positions.shape[0], -1, 3),
     log_scaling = get_keys([f'scale_{k}' for k in range(3)]),
     rotation = get_keys([f'rot_{k}' for k in range(4)]),
     opacity_logit = get_keys(['opacity'])
