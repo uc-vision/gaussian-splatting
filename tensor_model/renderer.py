@@ -1,3 +1,4 @@
+from dataclasses import asdict
 import torch
 import math
 
@@ -7,9 +8,7 @@ from .gaussians import Gaussians
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
 import numpy as np
-
-
-  
+ 
   
 def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
   
@@ -35,7 +34,7 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
         sh_degree=model.sh_degree,
         campos=pos,
         prefiltered=False,
-        debug=True
+        debug=False
     )
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
@@ -43,6 +42,7 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
 
     if torch.is_grad_enabled():
       means2D.requires_grad_(True).retain_grad()
+
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii = rasterizer(
