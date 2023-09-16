@@ -15,9 +15,16 @@ def sh_features(deg):
   return (deg + 1) ** 2 
 
 def inverse_sigmoid(x):
-    return math.log(x/(1-x))
+    return torch.log(x/(1-x))
 
 
+def check_sh_degree(sh_features):
+  n_sh = sh_features.shape[1]
+  n = int(math.sqrt(n_sh))
+
+  assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
+  return n
+  
 @dataclass
 class Gaussians(TensorClass):
 
@@ -27,16 +34,17 @@ class Gaussians(TensorClass):
   rotation  : Float32[Tensor, '4']
   opacity   : Float32[Tensor, '1']
 
+  def __post_init__(self, broadcast, convert_types):
+    super().__post_init__(broadcast, convert_types)
+    check_sh_degree(self.sh_features)
+
   def split_sh(self):
     return self.sh_features[:, :1], self.sh_features[:, 1:]
 
+
   @property
   def sh_degree(self):
-    n_sh = self.sh_features.shape[1]
-    n = int(math.sqrt(n_sh))
-
-    assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({self.sh_rest.shape})"
-    return (n - 1)
+    return check_sh_degree(self.sh_features)
 
 
 

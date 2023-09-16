@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import torch
 import math
 
@@ -9,6 +9,12 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 
 import numpy as np
  
+
+@dataclass
+class RenderOutputs:
+  image : torch.Tensor
+  radii : torch.Tensor
+   
   
 def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
   
@@ -43,8 +49,6 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
     if torch.is_grad_enabled():
       means2D.requires_grad_(True).retain_grad()
 
-
-    # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii = rasterizer(
         means2D = means2D,
         means3D = model.positions,
@@ -54,8 +58,7 @@ def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
         scales = model.scaling,
         rotations = model.rotation)
 
-    # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
-    # They will be excluded from value updates used in the splitting criteria.
-    return {"render": rendered_image,
-            "visibility_filter" : radii > 0,
-            "radii": radii}
+    return RenderOutputs(
+      image = rendered_image,
+      radii = radii
+    )

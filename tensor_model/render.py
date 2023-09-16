@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import cv2
 from natsort import natsorted
 import numpy as np
 import open3d as o3d
@@ -8,18 +9,22 @@ from .fov_camera import FOVCamera, load_camera_json
 from .loading import from_pcd
 
 from camera_geometry.scan import FrameSet, Camera
+from matplotlib import pyplot as plt
 
 from .renderer import  render
+import re
 
 
 def find_cloud(p:Path):
-  clouds = [d / "point_cloud.ply" for d in p.iterdir() if d.is_dir()]
-  clouds = natsorted(clouds)
+  clouds = [(m.group(1), d / "point_cloud.ply") for d in p.iterdir() 
+            if d.is_dir() and (m:=re.search('iteration_(\d+)', d.name))
+          ]
+  clouds = sorted(clouds, key=lambda x: int(x[0]))
 
   if len(clouds) == 0:
     raise FileNotFoundError(f"No point clouds found in {str(p)}")
 
-  return clouds[-1]
+  return clouds[-1][1]
 
 
 def camera_to_fov(camera:Camera) -> FOVCamera:
@@ -33,6 +38,8 @@ def camera_to_fov(camera:Camera) -> FOVCamera:
       image_name = ""
     )
    
+
+
 
 
 def main():
@@ -53,13 +60,20 @@ def main():
 
   device = torch.device(args.device)
 
-  gaussians = from_pcd(pcd).to(device)
-  cameras = load_camera_json(args.input / 'cameras.json')
+  with torch.no_grad():
+    gaussians = from_pcd(pcd).to(device)
+    cameras = load_camera_json(args.input / 'cameras.json')
+    cameras = natsorted(cameras.values(), key=lambda x: x.image_name)
 
-  for k, camera in cameras.items():
-    print(camera.image_name)
-    render(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
+    for camera in  cameras:
+      outputs = render(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
 
+      image = outputs.image.permute(1, 2, 0).cpu().numpy()
+      plt.imshow(image)
+
+      plt.show()
+      
+      
   
 
 if __name__ == '__main__':
