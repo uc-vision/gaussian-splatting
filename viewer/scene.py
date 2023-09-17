@@ -5,7 +5,7 @@ import pyrender
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from tensor_model.fov_camera import FOVCamera
+from tensor_model.fov_camera import FOVCamera, join_rt
 
 
 def normalize(v):
@@ -36,6 +36,11 @@ def make_sphere(pos, color, radius):
 def fov_to_focal(fov, image_size):
   return image_size / (2 * np.tan(fov / 2))
 
+flip_z = np.array([
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, -1]
+])
 
 class Scene:
   def __init__(self):
@@ -61,14 +66,16 @@ class Scene:
    
   def set_camera(self, camera:FOVCamera):
     self.camera.yfov = camera.fov[1]
-    self.cam_node.matrix = camera.camera_t_world
+
+    rotation = flip_z @ camera.rotation 
+    self.cam_node.matrix = join_rt(rotation, camera.position)
 
 
   def get_camera(self, image_size) -> FOVCamera:
     focal_length = fov_to_focal(self.camera.yfov, image_size[1])
     return FOVCamera(
       position = self.cam_pos,
-      rotation = self.cam_rotation,
+      rotation = flip_z @ self.cam_rotation,
       image_size = image_size,
       focal_length = focal_length,
       image_name = "scene_camera"
