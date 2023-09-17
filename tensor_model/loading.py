@@ -98,6 +98,8 @@ def random_gaussians(n:int, sh_degree:int):
 
 
 
+
+
 if __name__ == '__main__':
   temp_path = Path(tempfile.mkdtemp())
 

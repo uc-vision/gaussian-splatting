@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 from PySide6 import QtGui, QtCore, QtWidgets
 from PySide6.QtCore import Qt, QEvent
 
@@ -8,6 +9,8 @@ import pyrender
 from viewer.camera import FlyCamera
 from viewer.scene import Scene
 
+from tensor_model.fov_camera import FOVCamera
+from tensor_model.gaussians import Gaussians
     
 @dataclass 
 class Settings:
@@ -20,7 +23,7 @@ class Settings:
 class SceneWidget(QtWidgets.QWidget):
   
 
-  def __init__(self):
+  def __init__(self, gaussians:Gaussians, cameras:List[FOVCamera]):
     super(SceneWidget, self).__init__()
 
     SceneWidget.instance = self
@@ -36,7 +39,20 @@ class SceneWidget(QtWidgets.QWidget):
 
     self.renderer = pyrender.OffscreenRenderer(
       self.size().width(), self.size().height())
+    
+    self.gaussians = gaussians
+    self.cameras = cameras
 
+    self.scene.set_camera(self.cameras[0])
+
+    points = pyrender.Mesh.from_points(self.gaussians.positions, gaussians.colors)
+    self.scene.add(points)
+
+    # image_size = (self.size().width(), self.size().height())
+    # print(self.cameras[0].fov, self.scene.get_camera(image_size).fov)
+
+    # self.scene.set_camera(self.scene.get_camera(image_size))
+    # print(self.scene.get_camera(image_size))
 
     self.setFocusPolicy(Qt.StrongFocus)
     self.setMouseTracking(True)

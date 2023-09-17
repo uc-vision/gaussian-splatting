@@ -6,7 +6,7 @@ import torch
 from torch import functional as F
 
 from tensor_model.geometry import quat_to_mat_kernel
-from utils.sh_utils import RGB2SH
+from utils.sh_utils import RGB2SH, SH2RGB
 
 from .typecheck import NVec3, Vec1, Vec3, Vec4, typechecked, Float32, Tensor
 from simple_knn._C import distCUDA2
@@ -46,7 +46,9 @@ class Gaussians(TensorClass):
   def sh_degree(self):
     return check_sh_degree(self.sh_features)
 
-
+  @property
+  def colors(self):
+    return SH2RGB(self.sh_features[:, 0])
 
   @property
   def rotation_matrix(self):

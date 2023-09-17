@@ -5,13 +5,13 @@ from natsort import natsorted
 import numpy as np
 import open3d as o3d
 import torch
-from .fov_camera import FOVCamera, load_camera_json
-from .loading import from_pcd
+from ..fov_camera import FOVCamera, load_camera_json
+from ..loading import from_pcd, read_gaussians
 
 from camera_geometry.scan import FrameSet, Camera
 from matplotlib import pyplot as plt
 
-from .renderer import  render
+from ..renderer import  render
 import re
 
 
@@ -40,38 +40,34 @@ def camera_to_fov(camera:Camera) -> FOVCamera:
    
 
 
-
-
 def main():
   torch.set_printoptions(precision=4, sci_mode=False, linewidth=200)
   np.set_printoptions(precision=4, suppress=True, linewidth=200)
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('input', type=Path)
+  parser.add_argument('model_path', type=Path)
   parser.add_argument('--device', default='cuda')
+  parser.add_argument('--show', action='store_true')
   
   args = parser.parse_args()
 
-  cloud_filename = find_cloud(args.input / 'point_cloud')
+  cloud_filename = find_cloud(args.model_path / 'point_cloud')
   print("Loading", cloud_filename)
-
-  pcd = o3d.t.io.read_point_cloud(str(cloud_filename))
-  # scene = FrameSet.load_file(args.input / 'scene.json')
 
   device = torch.device(args.device)
 
   with torch.no_grad():
-    gaussians = from_pcd(pcd).to(device)
+    gaussians = read_gaussians(cloud_filename).to(device)
     cameras = load_camera_json(args.input / 'cameras.json')
     cameras = natsorted(cameras.values(), key=lambda x: x.image_name)
 
     for camera in  cameras:
       outputs = render(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
 
-      image = outputs.image.permute(1, 2, 0).cpu().numpy()
-      plt.imshow(image)
-
-      plt.show()
+      if args.show:
+        image = outputs.image.permute(1, 2, 0).cpu().numpy()
+        plt.imshow(image)
+        plt.show()
       
       
   

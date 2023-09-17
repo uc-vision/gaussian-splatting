@@ -5,6 +5,8 @@ import pyrender
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from tensor_model.fov_camera import FOVCamera
+
 
 def normalize(v):
   return v / np.linalg.norm(v)
@@ -31,8 +33,12 @@ def make_sphere(pos, color, radius):
   node = pyrender.Node(mesh=sphere_mesh, translation=pos)
   return node
 
+def fov_to_focal(fov, image_size):
+  return image_size / (2 * np.tan(fov / 2))
+
+
 class Scene:
-  def __init__(self, image_size=(1024, 768)):
+  def __init__(self):
 
     self.scene = pyrender.Scene(ambient_light=np.array([0.5, 0.5, 0.5, 1.0]))
     self.light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
@@ -45,7 +51,28 @@ class Scene:
     self.camera = pyrender.PerspectiveCamera(yfov=(np.pi / 3.0))
     self.cam_node = self.scene.add(self.camera, pose=np.eye(4))
 
-  
+   
+  def add_node(self, node):
+    self.scene.add_node(node)
+
+  def add(self, mesh, pose=None):
+    self.scene.add(mesh, pose=pose)
+
+   
+  def set_camera(self, camera:FOVCamera):
+    self.camera.yfov = camera.fov[1]
+    self.cam_node.matrix = camera.camera_t_world
+
+
+  def get_camera(self, image_size) -> FOVCamera:
+    focal_length = fov_to_focal(self.camera.yfov, image_size[1])
+    return FOVCamera(
+      position = self.cam_pos,
+      rotation = self.cam_rotation,
+      image_size = image_size,
+      focal_length = focal_length,
+      image_name = "scene_camera"
+    )
 
   def look_at(self, pos:np.array, target:np.ndarray, up:np.ndarray=np.array([0, 0, 1])):
     self.cam_node.matrix = look_at_pose(pos, target, up)
