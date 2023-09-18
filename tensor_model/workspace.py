@@ -9,6 +9,8 @@ from tensor_model.fov_camera import FOVCamera, load_camera_json
 from tensor_model.loading import read_gaussians
 from .gaussians import Gaussians
 
+import open3d as o3d
+
 @dataclass
 class Workspace:
   model_path:Path
@@ -26,6 +28,11 @@ class Workspace:
     paths = sorted(paths, key=lambda x: int(x[0]))
     return paths[-1][1]
             
+  def load_model(self, model_name:str) -> Gaussians:
+    return read_gaussians(self.cloud_files[model_name])
+  
+  def load_initial_points(self) -> o3d.t.geometry.PointCloud:
+    return o3d.t.io.read_point_cloud(str(self.model_path / 'input.ply'))
   
 
 def find_clouds(p:Path):

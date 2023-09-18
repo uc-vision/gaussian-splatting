@@ -11,7 +11,7 @@ from ..loading import from_pcd, read_gaussians
 from camera_geometry.scan import FrameSet, Camera
 from matplotlib import pyplot as plt
 
-from ..renderer import  render
+from ..renderer import  render_gaussians
 import re
 
 
@@ -62,7 +62,7 @@ def main():
     cameras = natsorted(cameras.values(), key=lambda x: x.image_name)
 
     for camera in  cameras:
-      outputs = render(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
+      outputs = render_gaussians(camera, gaussians, bg_color=torch.tensor([0, 0, 0], dtype=torch.float32, device=device))
 
       if args.show:
         image = outputs.image.permute(1, 2, 0).cpu().numpy()

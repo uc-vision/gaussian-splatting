@@ -16,7 +16,7 @@ class RenderOutputs:
   radii : torch.Tensor
    
   
-def render(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
+def render_gaussians(camera:FOVCamera, model : Gaussians, bg_color : torch.Tensor):
   
     device = model.device
     assert device != torch.device("cpu"), "CPU rendering is not supported."

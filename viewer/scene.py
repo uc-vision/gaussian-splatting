@@ -36,18 +36,18 @@ def make_sphere(pos, color, radius):
 def fov_to_focal(fov, image_size):
   return image_size / (2 * np.tan(fov / 2))
 
-flip_z = np.array([
+flip_yz = np.array([
   [1, 0, 0],
-  [0, 1, 0],
+  [0, -1, 0],
   [0, 0, -1]
 ])
 
 class Scene:
   def __init__(self):
 
-    self.scene = pyrender.Scene(ambient_light=np.array([0.5, 0.5, 0.5, 1.0]))
-    self.light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
-    self.scene.add(self.light, pose=look_at_pose(np.array([2, 2, 2]), np.array([0, 0, 0])))
+    self.scene = pyrender.Scene(ambient_light=np.array([1.0, 1.0, 1.0, 1.0]))
+    # self.light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
+    # self.scene.add(self.light, pose=look_at_pose(np.array([2, 2, 2]), np.array([0, 0, 0])))
 
     for i in range(10):
       node = make_sphere(np.random.randn(3) , color=np.random.rand(3), radius=0.1)
@@ -64,18 +64,19 @@ class Scene:
     self.scene.add(mesh, pose=pose)
 
    
-  def set_camera(self, camera:FOVCamera):
+  def set_fov_camera(self, camera:FOVCamera):
     self.camera.yfov = camera.fov[1]
 
-    rotation = flip_z @ camera.rotation 
+    rotation = camera.rotation  @ flip_yz 
     self.cam_node.matrix = join_rt(rotation, camera.position)
 
 
-  def get_camera(self, image_size) -> FOVCamera:
+
+  def get_fov_camera(self, image_size) -> FOVCamera:
     focal_length = fov_to_focal(self.camera.yfov, image_size[1])
     return FOVCamera(
       position = self.cam_pos,
-      rotation = flip_z @ self.cam_rotation,
+      rotation = self.cam_rotation @ flip_yz,
       image_size = image_size,
       focal_length = focal_length,
       image_name = "scene_camera"
@@ -101,13 +102,11 @@ class Scene:
   
 
   def move_camera(self, delta:np.ndarray):
-    self.cam_pos += delta @ self.cam_rotation.T
+    self.cam_pos += self.cam_rotation @ delta
 
-  def rotate_camera(self, yaw, pitch):
+
+  def rotate_camera(self, ypr):
     m = self.cam_node.matrix
-    m[:3, :3] =  m[:3, :3] @ R.from_euler('yxz', [yaw, pitch, 0]).as_matrix() 
+    m[:3, :3] =  m[:3, :3] @ R.from_euler('yxz', ypr).as_matrix() 
     self.cam_node.matrix = m
 
-
-
-  

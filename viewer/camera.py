@@ -27,15 +27,22 @@ class FlyCamera(Interaction):
       Qt.Key_D : np.array([1.,  0.,  0.])
     }
 
+    self.rotations = { 
+      Qt.Key_Z : np.array([0.,  0.,  1.]),
+      Qt.Key_C : np.array([0.,  0.,  -1.]),
+    }
+
+    self.all_keys = set(self.directions.keys()) | set(self.rotations.keys())
+
 
   def keyPressEvent(self, event: QtGui.QKeyEvent):
-    if event.key() in self.directions and not event.isAutoRepeat():
+    if event.key() in self.all_keys and not event.isAutoRepeat():
       self.down.add(event.key())
       return True
       
       
   def keyReleaseEvent(self, event: QtGui.QKeyEvent):
-    if event.key() in self.directions  and not event.isAutoRepeat():
+    if event.key() in self.all_keys  and not event.isAutoRepeat():
       self.down.discard(event.key())
       return True
     
@@ -47,7 +54,12 @@ class FlyCamera(Interaction):
   def update(self, dt:float):
     scene = self.scene
     for key in self.down:
-      scene.move_camera(self.directions[key] * dt * self.settings.move_speed)
+      if key in self.rotations:
+        scene.rotate_camera(self.rotations[key] * dt * self.settings.rotate_speed)
+
+      elif key in self.directions:
+        scene.move_camera(self.directions[key] * dt * self.settings.move_speed)
+    
 
   def mousePressEvent(self, event: QtGui.QMouseEvent):
     if event.buttons() & Qt.LeftButton:
@@ -60,9 +72,10 @@ class FlyCamera(Interaction):
 
       sz = self.scene_widget.size()
 
-      
-      self.scene.rotate_camera(delta.x() / sz.width() * self.settings.rotate_speed, 
-                                delta.y() / sz.height() * self.settings.rotate_speed)
+      speed = self.settings.drag_speed
+      self.scene.rotate_camera([-delta.x() / sz.width() * speed, 
+                                -delta.y() / sz.height() * speed,
+                                0])
       
       self.drag_mouse_pos = event.localPos()
     
