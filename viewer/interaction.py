@@ -51,9 +51,9 @@ class Interaction():
     self.on_deactivate()
 
 
-  def _event(self, event: QEvent) -> bool:
+  def trigger_event(self, event: QEvent) -> bool:
     if self.child is not None:
-      if self.child._event(event):
+      if self.child.trigger_event(event):
         return True
       
     return self.event(event) 

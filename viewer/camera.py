@@ -4,7 +4,6 @@ from PySide6 import QtGui, QtCore, QtWidgets
 from PySide6.QtCore import Qt, QEvent
 import PySide6.QtGui
 
-from beartype import beartype
 
 import numpy as np
 from viewer.interaction import Interaction
