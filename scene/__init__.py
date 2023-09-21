@@ -17,6 +17,7 @@ from typing import Dict
 
 import numpy as np
 import torch
+from scene.visibility import visibility
 from utils.camera_utils import camera_to_JSON
 from utils.graphics_utils import BasicPointCloud
 from utils.system_utils import searchForMaxIteration
@@ -76,9 +77,6 @@ def to_basic_cloud(pcd):
 
 
 
-
-
-
 def camera_extents(scan:FrameSet):
     cam_centers = np.stack([camera.location for camera in scan.expand_cameras()])
     avg_cam_center = np.mean(cam_centers, axis=0, keepdims=True)
@@ -87,7 +85,6 @@ def camera_extents(scan:FrameSet):
     diagonal = np.max(distances)
 
     return avg_cam_center.reshape(3), diagonal * 1.1
-
 
 
 
@@ -199,6 +196,9 @@ class Scene:
               pcd = add_bg_points(pcd, n_points=len(pcd.points) // 2, radius=1000.0)
               # _, min_depths = visibility_depths(scan.expand_cameras(), np.asarray(pcd.points))
               # base_scale = self.cameras_extent / 1000.0
+
+              vis = visibility(scan.expand_cameras(), np.asarray(pcd.points))
+              pcd = pcd[vis > 0]
 
               self.gaussians.create_from_pcd(pcd)
 

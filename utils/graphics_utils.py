@@ -19,6 +19,9 @@ class BasicPointCloud(NamedTuple):
     colors : np.array
     normals : np.array
 
+    def __getitem__(self, idx):
+        return BasicPointCloud(self.points[idx], self.colors[idx], self.normals[idx])
+
 def geom_transform_points(points, transf_matrix):
     P, _ = points.shape
     ones = torch.ones(P, 1, dtype=points.dtype, device=points.device)
