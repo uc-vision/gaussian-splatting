@@ -6,10 +6,10 @@ from camera_geometry import FrameSet
 from arguments import OptimizationParams
 from scene.gaussian_model import GaussianModel
 from scan_tools.crop_points import visibility
+import numpy as np
 
 import open3d as o3d
 import torch
-
 
 
 def load_cropped(args, op:OptimizationParams):
@@ -17,7 +17,7 @@ def load_cropped(args, op:OptimizationParams):
   model = GaussianModel(3)
   model.load_ply(args.cloud)
 
-  model.training_setup(op)
+  model.training_setup(op, 0)
   
   pos = model.get_xyz
   scan = FrameSet.load(args.scan)
@@ -51,7 +51,7 @@ def main():
   parser.add_argument("--max_depth", default=20.0, type=float, help="Max depth to determine the visible ROI")
   parser.add_argument("--min_depth", default=0.2, type=float, help="Min depth to determine the visible ROI")
   parser.add_argument("--proportion", type=float, default=0, help="Minimum proportion of views to be included")
-  parser.add_argument("--max_size", type=float, default=0.05, help="Cull points of large size")
+  parser.add_argument("--max_size", type=float, default=np.inf, help="Cull points of large size")
 
   parser.add_argument("--output", type=Path,  help="Write cropped ply file")
 
