@@ -73,6 +73,18 @@ class Gaussians(TensorClass):
       opacity = opacity)
 
 
+def sample_points(gaussians:Gaussians, n:int):
+  m = gaussians.batch_shape[0]
+  basis = gaussians.rotation_matrix   # (M, 3, 3)
+
+  samples = (torch.randn((m, n, 3), device=gaussians.device) 
+             * gaussians.scaling[:, None, :]) # (M, N, 3)
+  
+  samples = torch.einsum('mij,mnj->mni', basis, samples) # (M, N, 3)
+  return samples + gaussians.positions[:, None, :] # (M, N, 3)
+
+  
+
 
 @dataclass
 class GaussianParams(TensorClass):

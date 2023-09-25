@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .gaussians import Gaussians
+from .gaussians import Gaussians, sample_points
 
 def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
   gaussians = gaussians.detach().cpu()
@@ -36,6 +36,28 @@ def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
     pcd.point[f'rot_{i}'] = gaussians.rotation[:, i:i+1].numpy()
 
   return pcd
+
+def to_rgb(gaussians:Gaussians, densify=1) -> o3d.t.geometry.PointCloud:
+
+  if densify > 1:
+
+    points = sample_points(gaussians, densify).reshape(-1, 3)
+    colors = gaussians.colors.repeat_interleave(densify, dim=0)
+
+    pcd = o3d.t.geometry.PointCloud()
+    pcd.point['positions'] = points.cpu().numpy()
+    pcd.point['colors'] = colors.cpu().numpy()
+
+    return pcd
+  else:
+    gaussians = gaussians.detach().cpu()
+
+    pcd = o3d.t.geometry.PointCloud()
+    pcd.point['positions'] = gaussians.positions.numpy()
+    pcd.point['colors'] = gaussians.colors.numpy()
+
+    return pcd
+
 
 
 def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:
