@@ -20,7 +20,6 @@ import torch
 from splatting.gaussians.workspace import Workspace
 from splatting.gaussians.gaussians import Gaussians
 from splatting.gaussians.renderer import render_gaussians
-from splatting.viewer.main import sigint_handler
     
 from .camera import FlyCamera
 from .scene import Scene
@@ -186,6 +185,7 @@ class SceneWidget(QtWidgets.QWidget):
 
 
 def show_workspace(workspace:Workspace, gaussians:Gaussians = None):
+  from splatting.viewer.main import sigint_handler
   signal.signal(signal.SIGINT, sigint_handler)
 
   app = QtWidgets.QApplication(["viewer"])

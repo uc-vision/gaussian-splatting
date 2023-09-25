@@ -40,7 +40,7 @@ def main():
     if parsed_args.model_name is None:
       model_name = workspace.latest_iteration()
 
-    gaussians = workspace.load_model(model_name)
+    gaussians = workspace.load_model(parsed_args.model_name)
 
 
     qt_args = sys.argv[:1] + unparsed_args

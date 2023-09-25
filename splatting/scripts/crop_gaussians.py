@@ -102,7 +102,7 @@ def main():
       output.parent.mkdir(parents=True, exist_ok=True)
       
       write_gaussians(output, model)
-      print(f"Wrote {args.output}")
+      print(f"Wrote {output}")
 
     if args.show:
       from splatting.viewer.scene_widget import show_workspace
