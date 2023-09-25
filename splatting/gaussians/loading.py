@@ -8,14 +8,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .gaussians import Gaussians, inverse_sigmoid
+from .gaussians import Gaussians
 
 def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
   gaussians = gaussians.detach().cpu()
 
   pcd = o3d.t.geometry.PointCloud()
   pcd.point['positions'] = gaussians.positions.numpy()
-  pcd.point['opacity'] = inverse_sigmoid(gaussians.opacity).numpy()
+  pcd.point['opacity'] = torch.logit(gaussians.opacity, eps=1e-6).numpy()
 
   sh_dc, sh_rest = gaussians.split_sh()
 

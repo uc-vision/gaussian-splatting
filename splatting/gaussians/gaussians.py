@@ -14,9 +14,6 @@ from simple_knn._C import distCUDA2
 def num_sh_features(deg):
   return (deg + 1) ** 2 
 
-def inverse_sigmoid(x):
-    return torch.log(x/(1-x))
-
 
 def check_sh_degree(sh_features):
   n_sh = sh_features.shape[1]
