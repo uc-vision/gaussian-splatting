@@ -11,7 +11,7 @@ from scan_tools.crop_points import visibility
 import torch
 from splatting.camera.fov import FOVCamera
 
-from splatting.gaussians.loading import read_gaussians, write_gaussians
+from splatting.gaussians.loading import from_pcd, read_gaussians, to_pcd, write_gaussians
 from splatting.gaussians.workspace import load_workspace
 
 
@@ -78,6 +78,8 @@ def main():
   parser.add_argument("--min_percent", type=float, default=0, help="Minimum percent of views to be included")
   parser.add_argument("--device", default='cuda:0')
 
+  parser.add_argument("--remove_outliers", type=float, default=None)
+
   
   parser.add_argument("--write", action="store_true", help="Write the cropped model to a file")
   parser.add_argument("--show", action="store_true")
@@ -95,6 +97,15 @@ def main():
 
     model = model.to(args.device)
     model = crop_model(model, workspace.cameras, args)
+
+    if args.remove_outliers is not None:
+      pcd = to_pcd(model)
+      pcd, _ = pcd.remove_statistical_outliers(nb_neighbors=20, std_ratio=args.remove_outliers)
+      
+      num_removed = model.batch_shape[0] - pcd.point['positions'].shape[0]
+
+      model = from_pcd(pcd)
+      print(f"Removed {num_removed} outliers")
 
     if args.write:
 
