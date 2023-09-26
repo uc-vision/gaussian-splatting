@@ -534,9 +534,15 @@ class GaussianModel:
                     big_points_vs=big_points_vs.sum().item())
     
 
-    def add_densification_stats(self, viewspace_point_tensor, update_filter):
-        self.vs_gradient_accum[update_filter] += torch.norm(
+    def add_densification_stats(self, viewspace_point_tensor, update_filter, radius):
+        
+        radius = radius[update_filter]
+        ratio = radius / radius.mean()
+
+
+        self.vs_gradient_accum[update_filter] += ratio * torch.norm(
             viewspace_point_tensor.grad[update_filter,:2], dim=-1)
+
         
         self.ws_gradient_accum[update_filter] += self._xyz.grad[update_filter]
         self.vis_count[update_filter] += 1
