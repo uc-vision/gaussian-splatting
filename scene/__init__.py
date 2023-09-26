@@ -64,7 +64,11 @@ def load_cloud(scan:FrameSet) -> BasicPointCloud:
   assert 'sparse' in scan.models, "No sparse model found in scene.json"
   pcd_file = scan.find_file(scan.models.sparse.filename)
 
-  return o3d.io.read_point_cloud(str(pcd_file))
+
+  pcd = o3d.io.read_point_cloud(str(pcd_file))
+  print(f"Loaded {pcd_file}: {pcd}")
+
+  return pcd
 
 
 def to_basic_cloud(pcd):
@@ -160,6 +164,7 @@ class Scene:
         scan = scan.transform(translate_44(-centre[0], -centre[1], -centre[2])).copy(cameras=cameras)
         pcd = load_cloud(scan).translate(-centre)
 
+
         print("Undistorted cameras:")
         for k, camera in scan.cameras.items():
             print(k, camera)
@@ -198,7 +203,8 @@ class Scene:
               # base_scale = self.cameras_extent / 1000.0
 
               vis = visibility(scan.expand_cameras(), np.asarray(pcd.points))
-              pcd = pcd[vis > 0]
+              print(f"Visible {(vis > 0).sum()}")
+              pcd = pcd.select_by_index(np.flatnonzero(vis > 0))
 
               self.gaussians.create_from_pcd(pcd)
 
