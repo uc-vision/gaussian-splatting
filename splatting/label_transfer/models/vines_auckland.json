@@ -1,0 +1,23 @@
+{
+  "dataset_name": "vines",
+  "config_file": "vines_auckland_config.yaml",
+  "weight_file": "vines_auckland_model_final.pth",
+
+  "thing_classes": ["node"],
+  "stuff_classes": ["background", "cane", "trunk", "wire", "post"],
+  "score_thresh_test": 0.01,
+  "image_size": 2048,
+
+
+  "stuff_colors": [
+    [22, 114, 136],
+    [140, 218, 236],
+    [180, 82, 72],
+    [212, 140, 132],
+    [168, 154, 73]
+  ],
+
+  "thing_colors": [
+    [60, 180, 100]
+  ]
+}

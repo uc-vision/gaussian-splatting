@@ -1,0 +1,13 @@
+{
+  "dataset_name": "fruitlet",
+  "model_zoo": "COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml",
+  "weight_file" : "apples_auckland_model_final.pth",
+
+  "thing_classes": ["fruitlet"],
+  "thing_colors": [
+    [155, 221, 177]
+  ],
+
+  "image_size": 2048,
+  "score_thresh_test": 0.2
+}
