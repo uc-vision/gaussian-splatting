@@ -2,6 +2,11 @@ import argparse
 import json
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
+from detectron2.checkpoint import DetectionCheckpointer
+
+from detectron2.modeling import build_model
+
+
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
 
@@ -47,6 +52,45 @@ def draw_panoptic(input_image, outputs, metadata):
 def find_detectors():
   model_dir = Path(__file__).parent / "models"
   return {file.stem:file for file in list(model_dir.glob("*.json"))}
+
+
+class Predictor:
+
+    def __init__(self, cfg):
+        self.cfg = cfg.clone()  # cfg can be modified by model
+        self.model = build_model(self.cfg)
+        self.model.eval()
+
+        if len(cfg.DATASETS.TEST):
+            self.metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
+
+        checkpointer = DetectionCheckpointer(self.model)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
+
+        self.size_range = (cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MAX_SIZE_TEST)
+
+        self.input_format = cfg.INPUT.FORMAT
+        assert self.input_format in ["RGB", "BGR"], self.input_format
+
+    def __call__(self, image:torch.Tensor):
+        with torch.no_grad():  
+            if image.shape[-1] == 3:
+              image = image.permute(2, 0, 1)
+
+            if self.input_format == "RGB":
+                image = image.flip(0)
+
+            height, width = image.shape[-2:]
+            image = image.to(self.cfg.MODEL.DEVICE).to(torch.float32)
+
+            inputs = {"image": image,
+                      "height": height, "width": width}
+            predictions = self.model([inputs])[0]
+            return predictions
+
+
+
+
 
 
 def model_setup(model_config:Path, device:str="cuda:0"):
@@ -101,5 +145,5 @@ def model_setup(model_config:Path, device:str="cuda:0"):
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = conf_threshold
     cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = conf_threshold
 
-  return DefaultPredictor(cfg), metadata
+  return Predictor(cfg), metadata
 

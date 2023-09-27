@@ -12,7 +12,6 @@ def main():
   parser.add_argument("--config", type=Path, required=True)
 
   
-
   args = parser.parse_args()
   predictor, metadata = model_setup(args.config)
 

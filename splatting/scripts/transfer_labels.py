@@ -9,29 +9,17 @@ from typing import List
 import cv2
 
 import numpy as np
+import torch
+from splatting.camera.fov import FOVCamera
 from tqdm import tqdm
+from splatting.gaussians.renderer import render_gaussians
 
 from splatting.gaussians.workspace import load_workspace
 
 from ..label_transfer.instance_mask import extract_instances, InstanceMask
-from ..label_transfer.detector import find_detectors, model_setup
+from ..label_transfer.detector import find_detectors, model_setup, vis_outputs
 
 
-@dataclass
-class ImageInstances:
-  instances : List[InstanceMask]
-  image : np.ndarray
-
-
-def load_detect_image(detector, image_path:Path):
-  image = cv2.imread(str(image_path))
-  outputs = detector(image)
-
-  return extract_instances(outputs)
-
-
-
-  
   
 
 def main():
@@ -40,8 +28,10 @@ def main():
 
   parser.add_argument("model_path", type=Path)
   parser.add_argument("--detector", type=str, required=True)
-  
+  parser.add_argument("--model_name", type=str)
 
+  parser.add_argument("--device", type=str, default="cuda:0")
+  parser.add_argument("--show", action="store_true")
 
   args = parser.parse_args()
 
@@ -52,23 +42,34 @@ def main():
     raise ValueError(f"Detector {args.detector} not found, options: {options}")    
   
   detector, metadata = model_setup(detectors[args.detector])
- 
 
   workspace = load_workspace(args.model_path)
 
-  if model_name is None:
-      model_name = workspace.latest_iteration()
+  if args.model_name is None:
+      args.model_name = workspace.latest_iteration()
     
-  gaussians = workspace.load_model(model_name)
+  gaussians = workspace.load_model(args.model_name).to(args.device)
+  bg_color = torch.Tensor([0, 0, 0])
 
-  print("Detecting images...")
-  image_masks = {k:load_detect_image(detector, camera.image_name) 
-                 for k, camera in tqdm(workspace.cameras.items())}
+  for camera in workspace.cameras:
+    camera = camera.resize_shortest(detector.size_range)
+
+    with torch.no_grad():
+      rgb = render_gaussians(camera, gaussians, bg_color).image
+      bgr = rgb.flip(0)
+
+      outputs = detector(bgr * 255)
+
+      if args.show:
+        bgr = (bgr.clamp(0, 1) * 255).to(torch.uint8).permute(1, 2, 0).cpu().numpy()
+        vis = vis_outputs(outputs, bgr, metadata)
+
+        vis = cv2.resize(vis, (int(1024 * camera.aspect), 1024))
+
+        cv2.imshow("detections", vis)
+        cv2.waitKey(0)
 
 
-
-
-  # image_files = 
 
 
 if __name__ == "__main__":

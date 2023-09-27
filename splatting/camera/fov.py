@@ -45,17 +45,19 @@ class FOVCamera:
     width, height = self.image_size
     return width / height
   
-  @property 
   def resized(self, scale_factor) -> 'FOVCamera':
-    width = round(width * scale_factor)
-    height = round(height * scale_factor)
-
-    width, height = self.image_size
+    w, h = [round(x * scale_factor) for x in self.image_size]
     return replace(self,
-      image_size=(width, height),
+      image_size=(w, h),
       focal_length=self.focal_length * scale_factor
     )
     
+
+  def resize_shortest(self, size_range) -> 'FOVCamera':
+    shortest = min(self.image_size)
+    scale = (size_range[0] / shortest if shortest < size_range[0] 
+             else size_range[1] / shortest)
+    return self.resized(scale)
 
   @property
   def world_t_camera(self):

@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from beartype import beartype
 from natsort import natsorted
 from dataclasses import dataclass
 
@@ -10,12 +11,13 @@ from .gaussians import Gaussians
 
 import open3d as o3d 
 
+@beartype
 @dataclass
 class Workspace:
   model_path:Path
 
   cloud_files : dict[str, Path]
-  cameras:dict[str, FOVCamera]
+  cameras:list[FOVCamera]
 
   def latest_iteration(self) -> str:
     paths = [(m.group(1), name) for name in self.cloud_files.keys()
@@ -51,7 +53,12 @@ def find_clouds(p:Path):
 
 def load_workspace(model_path:Path | str) -> Workspace:
   model_path = Path(model_path)
-  cloud_files = find_clouds(model_path / "point_cloud")
+  cloud_path = model_path / "point_cloud"
+  
+  if not cloud_path.exists():
+    raise FileNotFoundError(f"Could not find point cloud directory at {str(cloud_path)}")
+  
+  cloud_files = find_clouds(cloud_path)
 
   cameras = load_camera_json(model_path / "cameras.json")
   cameras = natsorted(cameras.values(), key=lambda x: x.image_name)
