@@ -27,7 +27,7 @@ def main():
   gaussians = read_gaussians(args.input)
   pcd = to_rgb(gaussians, densify=args.densify)
 
-  if args.output is None and not args.show:
+  if args.write is None and not args.show:
     raise ValueError("Must specify --output or --show")
 
   if args.show:
@@ -35,3 +35,5 @@ def main():
   
   if args.write:
     o3d.t.io.write_point_cloud(str(args.write), pcd)
+
+    print(f"Wrote {pcd} to {args.write}")

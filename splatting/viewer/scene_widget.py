@@ -194,6 +194,8 @@ def show_workspace(workspace:Workspace, gaussians:Gaussians = None):
   if gaussians is None:
     gaussians = workspace.load_model(workspace.latest_iteration())
 
+  print(f"Showing model from {workspace.model_path}: {gaussians}")
+
 
   widget.load_workspace(workspace, gaussians)
   widget.show()

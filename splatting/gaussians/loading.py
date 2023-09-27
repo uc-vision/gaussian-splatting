@@ -46,7 +46,7 @@ def to_rgb(gaussians:Gaussians, densify=1) -> o3d.t.geometry.PointCloud:
 
     pcd = o3d.t.geometry.PointCloud()
     pcd.point['positions'] = points.cpu().numpy()
-    pcd.point['colors'] = colors.cpu().numpy()
+    pcd.point['colors'] = colors.clamp(0, 1).cpu().numpy()
 
     return pcd
   else:
@@ -54,10 +54,9 @@ def to_rgb(gaussians:Gaussians, densify=1) -> o3d.t.geometry.PointCloud:
 
     pcd = o3d.t.geometry.PointCloud()
     pcd.point['positions'] = gaussians.positions.numpy()
-    pcd.point['colors'] = gaussians.colors.numpy()
+    pcd.point['colors'] = gaussians.colors.clamp(0, 1).cpu().numpy()
 
     return pcd
-
 
 
 def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:

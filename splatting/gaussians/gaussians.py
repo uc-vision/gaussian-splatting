@@ -20,7 +20,7 @@ def check_sh_degree(sh_features):
   n = int(math.sqrt(n_sh))
 
   assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
-  return n
+  return (n - 1)
   
 @dataclass
 class Gaussians(TensorClass):
@@ -34,6 +34,11 @@ class Gaussians(TensorClass):
   def __post_init__(self, broadcast, convert_types):
     super().__post_init__(broadcast, convert_types)
     check_sh_degree(self.sh_features)
+
+
+
+  def __repr__(self):
+    return f"Gaussians with {self.batch_shape[0]} points, sh_degree={self.sh_degree}"
 
   def split_sh(self):
     return self.sh_features[:, :1], self.sh_features[:, 1:]

@@ -38,9 +38,10 @@ def main():
     workspace = load_workspace(parsed_args.model_path)
 
     if parsed_args.model_name is None:
-      model_name = workspace.latest_iteration()
+      parsed_args.model_name = workspace.latest_iteration()
 
     gaussians = workspace.load_model(parsed_args.model_name)
+    print(f"Loaded model {parsed_args.model_name}: {gaussians}")
 
 
     qt_args = sys.argv[:1] + unparsed_args
