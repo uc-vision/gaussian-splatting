@@ -69,8 +69,6 @@ class SceneWidget(QtWidgets.QWidget):
     self.setMouseTracking(True)
 
 
-
-
   def load_workspace(self, workspace:Workspace, gaussians:Gaussians):
     self.workspace = workspace
 
@@ -89,9 +87,7 @@ class SceneWidget(QtWidgets.QWidget):
     print('Showing view from camera', camera.image_name)
 
     camera_positions = np.array([c.position for c in self.workspace.cameras])
-    self.settings.move_speed = np.linalg.norm(camera_positions.max(axis=0) - camera_positions.min(axis=0)) / 20.
-  
-    
+    self.settings.move_speed = np.linalg.norm(camera_positions.max(axis=0) - camera_positions.min(axis=0)) / 10.
 
     self.scene.set_fov_camera(camera)
 
