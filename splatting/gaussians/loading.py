@@ -1,8 +1,8 @@
-import argparse
-import fileinput
+
 from pathlib import Path
 import tempfile
 import open3d as o3d
+import open3d.core as o3c
 
 import numpy as np
 import torch
@@ -10,12 +10,21 @@ import torch.nn.functional as F
 
 from .gaussians import Gaussians, sample_points
 
-def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
-  gaussians = gaussians.detach().cpu()
 
-  pcd = o3d.t.geometry.PointCloud()
-  pcd.point['positions'] = gaussians.positions.numpy()
-  pcd.point['opacity'] = torch.logit(gaussians.opacity, eps=1e-6).numpy()
+def torch_to_o3d(tensor:torch.Tensor) -> o3d.core.Tensor:
+  return o3d.core.Tensor.from_dlpack(torch.utils.dlpack.to_dlpack(tensor))
+
+def o3d_to_torch(tensor:o3c.Tensor) -> torch.Tensor:
+  return torch.from_dlpack(o3d.core.Tensor.to_dlpack(tensor))
+
+
+
+def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
+  pos = torch_to_o3d(gaussians.positions)
+
+  pcd = o3d.t.geometry.PointCloud(pos.device)
+  pcd.point['positions'] = pos
+  pcd.point['opacity'] = torch_to_o3d(torch.logit(gaussians.opacity, eps=1e-6))
 
   sh_dc, sh_rest = gaussians.split_sh()
 
@@ -23,48 +32,47 @@ def to_pcd(gaussians:Gaussians) -> o3d.t.geometry.PointCloud:
   sh_rest = sh_rest.permute(0, 2, 1).reshape(sh_rest.shape[0], sh_rest.shape[1] * sh_rest.shape[2])
 
   for i in range(3):
-    pcd.point[f'f_dc_{i}'] = sh_dc[:, i:i+1].numpy()
+    pcd.point[f'f_dc_{i}'] = torch_to_o3d(sh_dc[:, i:i+1])
 
   for i in range(sh_rest.shape[-1]):
-    pcd.point[f'f_rest_{i}'] = sh_rest[:, i:i+1].numpy()
+    pcd.point[f'f_rest_{i}'] = torch_to_o3d(sh_rest[:, i:i+1])
   
 
   for i in range(3):
-    pcd.point[f'scale_{i}'] = torch.log(gaussians.scaling[:, i:i+1]).numpy()
+    pcd.point[f'scale_{i}'] = torch_to_o3d(torch.log(gaussians.scaling[:, i:i+1]))
 
   for i in range(4):
-    pcd.point[f'rot_{i}'] = gaussians.rotation[:, i:i+1].numpy()
+    pcd.point[f'rot_{i}'] = torch_to_o3d(gaussians.rotation[:, i:i+1])
 
   return pcd
 
 def to_rgb(gaussians:Gaussians, densify=1) -> o3d.t.geometry.PointCloud:
+  pos = torch_to_o3d(gaussians['positions'])
+  pcd = o3d.t.geometry.PointCloud(pos.device)
 
   if densify > 1:
 
     points = sample_points(gaussians, densify).reshape(-1, 3)
     colors = gaussians.colors.repeat_interleave(densify, dim=0)
 
-    pcd = o3d.t.geometry.PointCloud()
-    pcd.point['positions'] = points.cpu().numpy()
-    pcd.point['colors'] = colors.clamp(0, 1).cpu().numpy()
+    pcd.point['positions'] = torch_to_o3d(points)
+    pcd.point['colors'] = torch_to_o3d(colors.clamp(0, 1))
 
     return pcd
   else:
-    gaussians = gaussians.detach().cpu()
 
-    pcd = o3d.t.geometry.PointCloud()
-    pcd.point['positions'] = gaussians.positions.numpy()
-    pcd.point['colors'] = gaussians.colors.clamp(0, 1).cpu().numpy()
+    pcd.point['positions'] = pos
+    pcd.point['colors'] = torch_to_o3d(gaussians.colors.clamp(0, 1))
 
     return pcd
 
 
 def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:
   def get_keys(ks):
-    values = [pcd.point[k].numpy() for k in ks]
-    return torch.from_numpy(np.concatenate(values, axis=-1))
+    values = [o3d_to_torch(pcd.point[k]) for k in ks]
+    return torch.concat(values, dim=-1)
 
-  positions = pcd.point['positions'].numpy()
+  positions = o3d_to_torch(pcd.point['positions'])
 
   attrs = sorted(dir(pcd.point))
   sh_attrs = [k for k in attrs if k.startswith('f_rest_') or k.startswith('f_dc_')]
@@ -77,13 +85,13 @@ def from_pcd(pcd:o3d.t.geometry.PointCloud) -> Gaussians:
 
   sh_dc = get_keys([f'f_dc_{k}' for k in range(3)]).view(positions.shape[0], 1, 3)
   sh_rest = get_keys([f'f_rest_{k}' for k in range(3 * (deg * deg - 1))])
-  sh_rest = sh_rest.view(positions.shape[0], 3, -1).transpose(1, 2)
+  sh_rest = sh_rest.view(positions.shape[0], 3, n_sh - 1).transpose(1, 2)
 
   rotation = get_keys([f'rot_{k}' for k in range(4)])
   opacity_logit = get_keys(['opacity'])
 
   return Gaussians(
-    positions = torch.from_numpy(positions),
+    positions = positions, 
     rotation = F.normalize(rotation, dim=1),
     opacity = torch.sigmoid(opacity_logit),
     sh_features = torch.cat([sh_dc, sh_rest], dim=1),

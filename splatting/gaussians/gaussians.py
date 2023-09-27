@@ -55,6 +55,14 @@ class Gaussians(TensorClass):
   @property
   def rotation_matrix(self):
     return quat_to_mat(self.rotation)
+  
+  @property
+  def radius(self):
+    return self.scaling.max(dim=1).values
+  
+  @property
+  def area(self):
+    return self.radius * self.scaling.median(dim=1).values
 
   @typechecked
   @staticmethod

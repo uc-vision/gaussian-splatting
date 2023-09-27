@@ -78,7 +78,9 @@ def main():
   parser.add_argument("--min_percent", type=float, default=0, help="Minimum percent of views to be included")
   parser.add_argument("--device", default='cuda:0')
 
-  parser.add_argument("--remove_outliers", type=float, default=None)
+  parser.add_argument("--statistical_outliers", type=float, default=None)
+  parser.add_argument("--radius_outliers", type=float, default=None)
+  parser.add_argument("--knn", type=int, default=100)
 
   
   parser.add_argument("--write", action="store_true", help="Write the cropped model to a file")
@@ -98,9 +100,14 @@ def main():
     model = model.to(args.device)
     model = crop_model(model, workspace.cameras, args)
 
-    if args.remove_outliers is not None:
-      pcd = to_pcd(model)
-      pcd, _ = pcd.remove_statistical_outliers(nb_neighbors=20, std_ratio=args.remove_outliers)
+    if any([args.radius_outliers, args.statistical_outliers]):
+      pcd = to_pcd(model.cpu())
+
+      if args.statistical_outliers is not None:
+        pcd, _ = pcd.remove_statistical_outliers(nb_neighbors=args.knn, std_ratio=args.statistical_outliers)
+      
+      if args.radius_outliers is not None:
+        pcd, _ = pcd.remove_radius_outliers(nb_points=args.knn, search_radius=args.radius_outliers)
       
       num_removed = model.batch_shape[0] - pcd.point['positions'].shape[0]
 
