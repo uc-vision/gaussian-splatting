@@ -48,6 +48,11 @@ def main():
   parser.add_argument('model_path', type=Path)
   parser.add_argument('--device', default='cuda')
   parser.add_argument('--show', action='store_true')
+
+  parser.add_argument('--resize', default=None, type=float)
+  parser.add_argument('--write', action='store_true')
+  parser.add_argument('--output', default=None, type=Path)
+
   
   args = parser.parse_args()
 
@@ -62,15 +67,27 @@ def main():
     cameras = natsorted(cameras.values(), key=lambda x: x.image_name)
 
     for camera in  cameras:
+      if args.resize is not None:
+        camera = camera.resize_shortest((args.resize, args.resize))
+
       outputs = render_gaussians(camera, 
           gaussians, bg_color=torch.tensor([0, 0, 0], 
           dtype=torch.float32, device=device))
 
+      image = outputs.image.permute(1, 2, 0).cpu().numpy()
+
       if args.show:
-        image = outputs.image.permute(1, 2, 0).cpu().numpy()
         plt.imshow(image)
         plt.show()
-      
+
+      if args.write or args.output is not None:
+        if args.output is None:
+          args.output = args.model_path / "render"
+
+        out_file = args.output / camera.image_name
+              
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(out_file), image)      
       
    
 

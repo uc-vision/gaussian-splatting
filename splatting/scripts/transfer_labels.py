@@ -32,6 +32,7 @@ def main():
 
   parser.add_argument("--device", type=str, default="cuda:0")
   parser.add_argument("--show", action="store_true")
+  
 
   args = parser.parse_args()
 
@@ -52,22 +53,33 @@ def main():
   bg_color = torch.Tensor([0, 0, 0])
 
   for camera in workspace.cameras:
-    camera = camera.resize_shortest(detector.size_range)
+    
+    resized = camera.resize_shortest(detector.size_range)
+    print(camera.image_name, camera.image_size, resized.image_size)
+    
+    labels = torch.Parameter(torch.zeros(gaussians.batch_shape, dtype=torch.float32, device=args.device))
+    opt = torch.optim.Adam([labels], lr=0.1)
 
     with torch.no_grad():
-      rgb = render_gaussians(camera, gaussians, bg_color).image
+      rgb = render_gaussians(resized, gaussians, bg_color).image
       bgr = rgb.flip(0)
 
-      outputs = detector(bgr * 255)
-
+      detections = detector(bgr * 255)
+      
       if args.show:
         bgr = (bgr.clamp(0, 1) * 255).to(torch.uint8).permute(1, 2, 0).cpu().numpy()
-        vis = vis_outputs(outputs, bgr, metadata)
+        vis = vis_outputs(detections, bgr, metadata)
 
         vis = cv2.resize(vis, (int(1024 * camera.aspect), 1024))
+        bgr = cv2.resize(bgr, (int(1024 * camera.aspect), 1024))
+
 
         cv2.imshow("detections", vis)
         cv2.waitKey(0)
+
+        cv2.imshow("detections", bgr)
+        cv2.waitKey(0)
+
 
 
 

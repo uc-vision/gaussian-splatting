@@ -8,6 +8,6 @@
     [155, 221, 177]
   ],
 
-  "image_size": 2048,
-  "score_thresh_test": 0.2
+  "//image_size": 2250,
+  "score_thresh_test": 0.1
 }
