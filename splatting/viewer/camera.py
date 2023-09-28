@@ -45,7 +45,7 @@ class FlyCamera(Interaction):
       self.down.add(event.key())
       return True
     
-    if event.key() in self.speed_controls:
+    if event.key() in self.speed_controls and event.modifiers() & Qt.KeypadModifier:
       self.settings.move_speed *= self.speed_controls[event.key()]
       return True
 

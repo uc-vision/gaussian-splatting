@@ -20,8 +20,6 @@ from ..label_transfer.instance_mask import extract_instances, InstanceMask
 from ..label_transfer.detector import find_detectors, model_setup, vis_outputs
 
 
-  
-
 def main():
 
   parser = argparse.ArgumentParser()
@@ -54,10 +52,10 @@ def main():
 
   for camera in workspace.cameras:
     
-    resized = camera.resize_shortest(detector.size_range)
-    print(camera.image_name, camera.image_size, resized.image_size)
+    resized = camera # camera.resize_shortest(detector.size_range)
+    print(camera.image_name, camera.image_size, resized.image_size, detector.size_range)
     
-    labels = torch.Parameter(torch.zeros(gaussians.batch_shape, dtype=torch.float32, device=args.device))
+    labels = torch.nn.Parameter(torch.zeros(gaussians.batch_shape, dtype=torch.float32, device=args.device))
     opt = torch.optim.Adam([labels], lr=0.1)
 
     with torch.no_grad():

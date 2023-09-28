@@ -58,14 +58,17 @@ class Predictor:
 
     def __init__(self, cfg):
         self.cfg = cfg.clone()  # cfg can be modified by model
-        self.model = build_model(self.cfg)
-        self.model.eval()
+        model = build_model(self.cfg)
+        model.eval()
 
         if len(cfg.DATASETS.TEST):
             self.metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
 
-        checkpointer = DetectionCheckpointer(self.model)
+        checkpointer = DetectionCheckpointer(model)
         checkpointer.load(cfg.MODEL.WEIGHTS)
+
+        self.model = model
+        # self.model = torch.compile(model)
 
         self.size_range = (cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MAX_SIZE_TEST)
 
@@ -82,6 +85,7 @@ class Predictor:
 
             height, width = image.shape[-2:]
             image = image.to(self.cfg.MODEL.DEVICE).to(torch.float32)
+
 
             inputs = {"image": image,
                       "height": height, "width": width}

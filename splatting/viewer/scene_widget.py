@@ -23,6 +23,7 @@ from splatting.gaussians.renderer import render_gaussians
     
 from .camera import FlyCamera
 from .scene import Scene
+from .keyboard import keyevent_to_string
 
 
 @dataclass 
@@ -30,6 +31,9 @@ class Settings:
   update_rate : int = 60
   move_speed : float = 1.0
   rotate_speed : float = 2.0
+
+  zoom_discrete : float = 1.2
+  zoom_continuous : float = 0.1
 
   drag_speed : float = 1.0
   point_size : float = 2.0
@@ -83,13 +87,18 @@ class SceneWidget(QtWidgets.QWidget):
     
     self.gaussians = gaussians.to(self.settings.device)
 
-    camera = self.workspace.cameras[0]
-    print('Showing view from camera', camera.image_name)
-
     camera_positions = np.array([c.position for c in self.workspace.cameras])
     self.settings.move_speed = np.linalg.norm(camera_positions.max(axis=0) - camera_positions.min(axis=0)) / 10.
 
+    self.set_camera_index(0)
+
+  def set_camera_index(self, index:int):
+    camera = self.workspace.cameras[index]
+    print('Showing view from camera', camera.image_name)
+    self.zoom = 1.0
+
     self.scene.set_fov_camera(camera)
+    self.camera_index = index
 
 
 
@@ -108,8 +117,25 @@ class SceneWidget(QtWidgets.QWidget):
     return False
   
   def keyPressEvent(self, event: QtGui.QKeyEvent) -> bool:
+
+
     if event.key() == Qt.Key_Print:
       self.save_snapshot()
+      return True
+  
+    elif event.key() == Qt.Key_BraceLeft:
+      self.set_camera_index(self.camera_index - 1)
+      return True
+    elif event.key() == Qt.Key_BraceRight:
+      self.set_camera_index(self.camera_index + 1)
+      return True
+    elif event.key() == Qt.Key_Equal: 
+      camera = self.scene.get_fov_camera(self.image_size)
+      self.scene.set_fov_camera(camera.zoom(self.settings.zoom_discrete))
+      return True
+    elif event.key() == Qt.Key_Minus:
+      camera = self.scene.get_fov_camera(self.image_size)
+      self.scene.set_fov_camera(camera.zoom(1 / self.settings.zoom_discrete))
       return True
 
     

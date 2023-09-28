@@ -59,6 +59,10 @@ class FOVCamera:
              else size_range[1] / shortest)
     return self.resized(scale)
 
+  def zoom(self, zoom_factor) -> 'FOVCamera':
+    return replace(self, focal_length=self.focal_length * zoom_factor)
+
+
   @property
   def world_t_camera(self):
     return join_rt(self.rotation, self.position)
