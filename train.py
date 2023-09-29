@@ -172,7 +172,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
 
                     size_threshold = opt.vs_threshold if iteration > opt.opacity_reset_interval else None
-                    prune_stats = gaussians.prune(min_opacity=0.05, max_screen_size=size_threshold)
+                    prune_stats = gaussians.prune(min_opacity=opt.min_opacity, max_screen_size=size_threshold)
 
                     for k, v in prune_stats.items():
                       tb_writer.add_scalar(f'pruned/{k}', v, iteration)

@@ -73,7 +73,7 @@ class OptimizationParams(ParamGroup):
         self.iterations = 30_000
         self.training_scale = 1.0
         
-        self.position_lr_init = 0.1 * 0.00016
+        self.position_lr_init =  0.00016
         self.position_lr_final =  0.0000016
 
         self.position_lr_delay_mult = 0.01
@@ -84,6 +84,7 @@ class OptimizationParams(ParamGroup):
         self.opacity_lr = 0.05
         self.scaling_lr =  0.005
         self.rotation_lr = 0.001
+        self.min_opacity = 0.05
         
         self.image_color_lr = 0.00001
         self.transform_sh_lr = 0.0001
