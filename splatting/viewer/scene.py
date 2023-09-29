@@ -46,12 +46,6 @@ class Scene:
   def __init__(self):
 
     self.scene = pyrender.Scene(ambient_light=np.array([1.0, 1.0, 1.0, 1.0]))
-    # self.light = pyrender.DirectionalLight(color=np.ones(3), intensity=2.0)
-    # self.scene.add(self.light, pose=look_at_pose(np.array([2, 2, 2]), np.array([0, 0, 0])))
-
-    for i in range(10):
-      node = make_sphere(np.random.randn(3) , color=np.random.rand(3), radius=0.1)
-      self.scene.add_node(node)
 
     self.camera = pyrender.PerspectiveCamera(yfov=(np.pi / 3.0))
     self.cam_node = self.scene.add(self.camera, pose=np.eye(4))
@@ -60,8 +54,8 @@ class Scene:
   def add_node(self, node):
     self.scene.add_node(node)
 
-  def add(self, mesh, pose=None):
-    self.scene.add(mesh, pose=pose)
+  def add(self, mesh, pose=None) -> pyrender.Node:
+    return self.scene.add(mesh, pose=pose)
 
    
   def set_fov_camera(self, camera:FOVCamera):

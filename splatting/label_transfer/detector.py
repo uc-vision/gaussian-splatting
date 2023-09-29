@@ -86,11 +86,12 @@ class Predictor:
             height, width = image.shape[-2:]
             image = image.to(self.cfg.MODEL.DEVICE).to(torch.float32)
 
+            with torch.cuda.amp.autocast(True):
 
-            inputs = {"image": image,
-                      "height": height, "width": width}
-            predictions = self.model([inputs])[0]
-            return predictions
+              inputs = {"image": image,
+                        "height": height, "width": width}
+              predictions = self.model([inputs])[0]
+              return predictions
 
 
 
