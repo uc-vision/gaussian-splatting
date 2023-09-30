@@ -142,6 +142,7 @@ class Scene:
 
         self.loaded_iter = None
         self.gaussians = gaussians
+        self.white_background = True
 
         if load_iteration:
             if load_iteration is None:
