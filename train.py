@@ -36,6 +36,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     gaussians:GaussianModel = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     per_image_l1 = {}
+    image_outliers = set()
 
     opt.iterations = int(opt.iterations * opt.training_scale)
     opt.densify_until_iter = int(opt.densify_until_iter * opt.training_scale)
@@ -102,7 +103,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # depth = render_pkg["depth"]
 
         # image = gaussians.correct_colors(viewpoint_cam.uid, image_raw)
-
         # Loss
 
 
@@ -123,8 +123,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
 
         iter_end.record()
-
-
 
         with torch.no_grad():
             # Progress bar
@@ -151,6 +149,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
               tb_writer.add_scalar('points/percent_visible', 100.0 * (n_visible / scene.gaussians.get_xyz.shape[0]), iteration)
 
             if iteration in testing_iterations and len(per_image_l1) > 0:
+
+              if iteration >= opt.densify_from_iter:
+                l1 = torch.Tensor(list(per_image_l1.values()))
+                std = (l1.pow(2) / (l1.shape[0] - 1)).sqrt()
+
+                image_outliers = {k:v for k, v in per_image_l1.items() 
+                                if v > opt.image_outlier_threshold * std}  
+                print(f"Image outliers: {image_outliers}")
+                
               tb_writer.add_histogram('images/l1_loss', torch.Tensor(list(per_image_l1.values())), iteration)
 
              
@@ -183,10 +190,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     torch.cuda.empty_cache()
                 # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                 #     gaussians.reset_opacity()
-            
 
             # Optimizer step
-            if iteration < opt.iterations:
+            if iteration < opt.iterations and name not in image_outliers:
                 gaussians.step()
 
             if (iteration in checkpoint_iterations):
