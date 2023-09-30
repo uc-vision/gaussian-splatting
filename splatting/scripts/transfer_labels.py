@@ -55,7 +55,10 @@ def main():
     resized = camera # camera.resize_shortest(detector.size_range)
     print(camera.image_name, camera.image_size, resized.image_size, detector.size_range)
     
-    labels = torch.nn.Parameter(torch.zeros(gaussians.batch_shape, dtype=torch.float32, device=args.device))
+    labels = torch.nn.Parameter(torch.zeros(gaussians.batch_shape, 
+                                  dtype=torch.float32, device=args.device))
+    
+    
     opt = torch.optim.Adam([labels], lr=0.1)
 
     with torch.no_grad():

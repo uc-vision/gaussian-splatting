@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 import signal
 import sys
 from typing import List, Optional, Tuple
@@ -45,6 +46,10 @@ class Settings:
   
   bg_color : Tuple[float, float, float] = (1, 1, 1)
 
+class ViewMode(Enum):
+  Initial = 0
+  Gaussians = 1
+  Points = 3
 
 
 class SceneWidget(QtWidgets.QWidget):
@@ -78,20 +83,20 @@ class SceneWidget(QtWidgets.QWidget):
     self.workspace = workspace
 
     points = pyrender.Mesh.from_points(gaussians.positions.cpu(), gaussians.colors.cpu())
-    self.scene.add(points, pose=np.eye(4))
+    self.points_node = self.scene.add(points, pose=np.eye(4))
 
-    # self.initial = workspace.load_initial_points()
-    # points = pyrender.Mesh.from_points(
-    #   self.initial.point['positions'].numpy(), self.initial.point['colors'].numpy())
-    
-    # self.scene.add(points, pose=np.eye(4))
+    initial = workspace.load_initial_points()
+    points = pyrender.Mesh.from_points(
+      initial.point['positions'].numpy(), initial.point['colors'].numpy())
+    self.initial_node = self.scene.add(points, pose=np.eye(4))
+
     
     self.gaussians = gaussians.to(self.settings.device)
-
     camera_positions = np.array([c.position for c in self.workspace.cameras])
     self.settings.move_speed = np.linalg.norm(camera_positions.max(axis=0) - camera_positions.min(axis=0)) / 10.
 
     self.set_camera_index(0)
+    self.set_viewmode(ViewMode.Gaussians)
 
   def set_camera_index(self, index:int):
     camera = self.workspace.cameras[index]
@@ -114,21 +119,32 @@ class SceneWidget(QtWidgets.QWidget):
   def event(self, event: QEvent):
     if not self.state.trigger_event(event):
       return super(SceneWidget, self).event(event)
-
     return False
   
-  def keyPressEvent(self, event: QtGui.QKeyEvent) -> bool:
+  def set_viewmode(self, viewmode:ViewMode):
+    self.view_mode = viewmode
 
+    for node in [self.initial_node, self.points_node]:
+      if self.scene.scene.has_node(node):
+        self.scene.scene.remove_node(node)
+
+    if viewmode == ViewMode.Initial:
+      self.scene.add_node(self.initial_node)
+    elif viewmode == ViewMode.Points:
+      self.scene.add_node(self.points_node)
+
+  
+  def keyPressEvent(self, event: QtGui.QKeyEvent) -> bool:
 
     if event.key() == Qt.Key_Print:
       self.save_snapshot()
       return True
   
     elif event.key() == Qt.Key_BraceLeft:
-      self.set_camera_index(self.camera_index - 1)
+      self.set_camera_index((self.camera_index - 1) % len(self.workspace.cameras))
       return True
     elif event.key() == Qt.Key_BraceRight:
-      self.set_camera_index(self.camera_index + 1)
+      self.set_camera_index((self.camera_index + 1) % len(self.workspace.cameras))
       return True
     elif event.key() == Qt.Key_Equal: 
       camera = self.scene.get_fov_camera(self.image_size)
@@ -139,6 +155,16 @@ class SceneWidget(QtWidgets.QWidget):
       self.scene.set_fov_camera(camera.zoom(1 / self.settings.zoom_discrete))
       return True
 
+    elif event.key() == Qt.Key_2:
+      self.set_viewmode(ViewMode.Gaussians)
+      return True
+    elif event.key() == Qt.Key_1:
+      self.set_viewmode(ViewMode.Initial)
+      return True
+    elif event.key() == Qt.Key_3:
+      self.set_viewmode(ViewMode.Points)
+      return True
+
     
     return super().keyPressEvent(event)
 
@@ -147,15 +173,18 @@ class SceneWidget(QtWidgets.QWidget):
     self.repaint()
 
   def render(self, camera):
-    with torch.no_grad():
-
-      rendering = render_gaussians(camera, self.gaussians, torch.Tensor(self.settings.bg_color))
-      
-      image = (rendering.image.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8)
-      image = image.cpu().numpy()
-      return np.ascontiguousarray(image)
-    # return self.renderer.render(self.scene.scene)
-
+    if self.view_mode == ViewMode.Gaussians:
+      with torch.no_grad():
+     
+        rendering = render_gaussians(camera, self.gaussians, torch.Tensor(self.settings.bg_color))
+        
+        image = (rendering.image.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8)
+        image = image.cpu().numpy()
+        return image
+    else:
+      image, depth = self.renderer.render(self.scene.scene)
+      return image
+    
   def paintEvent(self, event: QtGui.QPaintEvent):
     with QtGui.QPainter(self) as painter:
 
@@ -163,13 +192,11 @@ class SceneWidget(QtWidgets.QWidget):
       def next_mult(x):
         return int(math.ceil(x / m) * m)
         
-
       w, h = self.image_size
       round_size = (next_mult(w), next_mult(h))
-      image = self.render(self.scene.get_fov_camera(round_size))
+      image = np.ascontiguousarray(
+        self.render(self.scene.get_fov_camera(round_size)))
       
-
-
       painter.drawImage(0, 0, QtGui.QImage(image, image.shape[1], image.shape[0],  
                                            QtGui.QImage.Format_RGB888))
   def snapshot_file(self):

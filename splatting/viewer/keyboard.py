@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, QEvent
 keymap = {}
 for key, value in vars(Qt).items():
     if isinstance(value, Qt.Key):
-        keymap[value] = key.partition('_')[2]
+        keymap[value] = key
 
 def keyevent_to_string(event):
     sequence = []
