@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import signal
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from PySide6 import QtGui, QtCore, QtWidgets
 from PySide6.QtCore import Qt, QEvent
 import PySide6.QtGui
@@ -43,6 +43,7 @@ class Settings:
   render_multiple : int = 16
   device : str = 'cuda:0'
   
+  bg_color : Tuple[float, float, float] = (1, 1, 1)
 
 
 
@@ -148,7 +149,7 @@ class SceneWidget(QtWidgets.QWidget):
   def render(self, camera):
     with torch.no_grad():
 
-      rendering = render_gaussians(camera, self.gaussians, torch.Tensor([0, 0, 0]))
+      rendering = render_gaussians(camera, self.gaussians, torch.Tensor(self.settings.bg_color))
       
       image = (rendering.image.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8)
       image = image.cpu().numpy()
