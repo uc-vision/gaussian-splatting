@@ -89,6 +89,7 @@ class OptimizationParams(ParamGroup):
         self.image_color_lr = 0.00001
         self.transform_sh_lr = 0.0001
 
+        self.image_outlier_threshold = 2.0
         
         self.vs_threshold = 400 # large point threshold viewspace
         self.lambda_dssim = 0.2
