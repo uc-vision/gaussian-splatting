@@ -51,6 +51,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # first_iter = 0
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    print(f"bg_color {bg_color}")
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
     iter_start = torch.cuda.Event(enable_timing = True)
@@ -156,11 +157,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
               if iteration >= opt.densify_from_iter:
                 l1 = torch.Tensor(list(per_image_l1.values()))
-                std = (l1.pow(2) / (l1.shape[0] - 1)).sqrt()
+                std = (l1.pow(2).sum() / (l1.shape[0] - 1)).sqrt()
 
-                image_outliers = {k:v for k, v in per_image_l1.items() 
-                                if v > opt.image_outlier_threshold * std}  
-                print(f"Image outliers: {image_outliers}")
+                t = opt.image_outlier_threshold * std
+                image_outliers = {k: (v / std)  for k, v in per_image_l1.items() if v > t}  
+                print(f"Image outliers (std = {std}): {image_outliers}")
                 
               tb_writer.add_histogram('images/l1_loss', torch.Tensor(list(per_image_l1.values())), iteration)
 
