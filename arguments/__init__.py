@@ -108,6 +108,7 @@ class OptimizationParams(ParamGroup):
 
         # How much the split threshold is compared to clone threshold
         self.clone_split_ratio = 1/4.0  
+        self.render_interval = 0
 
         super().__init__(parser, "Optimization Parameters")
 

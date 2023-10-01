@@ -92,6 +92,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
 
+
+
+            
+
         viewpoint_cam:Camera = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         gt_image = viewpoint_cam.original_image.to(device='cuda', non_blocking=True)
 
@@ -198,6 +202,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+
+            if opt.render_interval > 0 and iteration % opt.render_interval == 0:
+              import torchvision
+
+              camera = scene.getTrainCameras()[0]
+              render_pkg = render(camera, gaussians, pipe, background)
+
+              image = render_pkg["render"]
+
+              render_path = Path(scene.model_path) / f'render' 
+              render_path.mkdir(parents=True, exist_ok=True)
+              
+              torchvision.utils.save_image(image, render_path / f'iter_{iteration:05d}.jpg')      
 
 def prepare_output_and_logger(args):    
     # if not args.model_path:
